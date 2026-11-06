@@ -2,9 +2,10 @@ import io
 import os
 import docx
 import streamlit as st
-from docx.enum.table import WD_ALIGN_VERTICAL, WD_TABLE_ALIGNMENT
+from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
 from docx.shared import Inches, Pt
 
 
@@ -23,6 +24,38 @@ def get_logo_path():
         if os.path.exists(filename):
             return filename
     return None
+
+
+def set_cell_rtl(cell):
+    """إجبار الخلية على التوجيه من اليمين إلى اليسار"""
+    tcPr = cell._tc.get_or_add_tcPr()
+    if tcPr.find(qn("w:bidi")) is None:
+        tcPr.append(OxmlElement("w:bidi"))
+
+
+def add_rtl_run(
+    paragraph, text, font_name="Traditional Arabic", font_size=11, bold=False
+):
+    """تطبيق التوجيه الصريح RTL على الفقرة والنص (Run) لمنع تعكيس الكلمات في Word"""
+    paragraph.paragraph_format.bidi = True
+
+    # ضبط وسم الفقرة
+    pPr = paragraph._p.get_or_add_pPr()
+    if pPr.find(qn("w:bidi")) is None:
+        pPr.append(OxmlElement("w:bidi"))
+
+    # إضافة النص وضبط الخط
+    run = paragraph.add_run(text)
+    run.font.name = font_name
+    run.font.size = Pt(font_size)
+    run.bold = bold
+
+    # إجبار Word على تطبيق RTL على مستوى النص نفسه
+    rPr = run._r.get_or_add_rPr()
+    if rPr.find(qn("w:rtl")) is None:
+        rPr.append(OxmlElement("w:rtl"))
+
+    return run
 
 
 st.set_page_config(
@@ -60,6 +93,7 @@ def process_docx(file_bytes, show_all_pages=False):
     for section in doc.sections:
         clear_existing_headers(section)
 
+        # تحديد إعدادات التكرار (الصفحة الأولى فقط أو جميع الصفحات)
         if not show_all_pages:
             section.different_first_page_header_footer = True
             header = section.first_page_header
@@ -73,33 +107,36 @@ def process_docx(file_bytes, show_all_pages=False):
 
         row = tbl.rows[0]
 
-        # العمود الأيمن: بيانات المادة والقسم
-        p_r = row.cells[0].paragraphs[0]
+        # 1. العمود الأيمن: مادة + مستوى + موسم
+        cell_r = row.cells[0]
+        set_cell_rtl(cell_r)
+        p_r = cell_r.paragraphs[0]
         p_r.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-        p_r.paragraph_format.bidi = True
-        p_r.add_run(
+        right_text = (
             f"مادة {subject}\n{class_level}\nالموسم الدراسي: {school_year}"
         )
+        add_rtl_run(p_r, right_text, font_size=11, bold=True)
 
-        # العمود الأوسط: إدراج الصورة (logo.jpg / logo.png)
+        # 2. العمود الأوسط: صورة الشعار فقط (logo.jpg / logo.png)
+        cell_c = row.cells[1]
+        set_cell_rtl(cell_c)
+        p_c = cell_c.paragraphs[0]
+        p_c.alignment = WD_ALIGN_PARAGRAPH.CENTER
         if logo_path:
             try:
-                p_c = row.cells[1].paragraphs[0]
-                p_c.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                p_c.paragraph_format.bidi = True
                 p_c.add_run().add_picture(logo_path, width=Inches(1.8))
             except Exception:
                 pass
 
-        # العمود الأيسر: بيانات المؤسسة والأستاذ
-        p_l = row.cells[2].paragraphs[0]
+        # 3. العمود الأيسر: مديرية + ثانوية + أستاذ
+        cell_l = row.cells[2]
+        set_cell_rtl(cell_l)
+        p_l = cell_l.paragraphs[0]
         p_l.alignment = WD_ALIGN_PARAGRAPH.LEFT
-        p_l.paragraph_format.bidi = True
-        p_l.add_run(
-            f"المديرية الإقليمية تاونات\nثانوية أولاد داود التأهيلية\nالأستاذ: {teacher_name}"
-        )
+        left_text = f"المديرية الإقليمية تاونات\nثانوية أولاد داود التأهيلية\nالأستاذ: {teacher_name}"
+        add_rtl_run(p_l, left_text, font_size=11, bold=True)
 
-        # مسافة فاصلة أسفل الترويسة لمنع التداخل مع النص
+        # مسافة فاصلة تعادل سطرين أسفل الترويسة لتفادي التداخل مع متن الملف
         p_space = header.add_paragraph()
         p_space.paragraph_format.space_before = Pt(0)
         p_space.paragraph_format.space_after = Pt(24)
