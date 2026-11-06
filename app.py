@@ -10,6 +10,7 @@ from docx.shared import Inches, Pt
 
 
 def clear_existing_headers(section):
+    """حذف أي ترويسات سابقة لتفادي التداخل"""
     section.header.is_linked_to_previous = False
     for h in [section.header, section.first_page_header]:
         for p in list(h.paragraphs):
@@ -19,7 +20,7 @@ def clear_existing_headers(section):
 
 
 def get_logo_path():
-    """البحث عن ملف الصورة سواء كان logo.jpg أو logo.png"""
+    """البحث عن ملف الشعار تلقائياً"""
     for filename in ["logo.jpg", "logo.png", "logo.jpeg", "LOGO.JPG", "LOGO.PNG"]:
         if os.path.exists(filename):
             return filename
@@ -36,21 +37,18 @@ def set_cell_rtl(cell):
 def add_rtl_run(
     paragraph, text, font_name="Traditional Arabic", font_size=11, bold=False
 ):
-    """تطبيق التوجيه الصريح RTL على الفقرة والنص (Run) لمنع تعكيس الكلمات في Word"""
+    """تطبيق التوجيه الصريح RTL على الفقرة والنص لمنع تعكيس الكلمات"""
     paragraph.paragraph_format.bidi = True
 
-    # ضبط وسم الفقرة
     pPr = paragraph._p.get_or_add_pPr()
     if pPr.find(qn("w:bidi")) is None:
         pPr.append(OxmlElement("w:bidi"))
 
-    # إضافة النص وضبط الخط
     run = paragraph.add_run(text)
     run.font.name = font_name
     run.font.size = Pt(font_size)
     run.bold = bold
 
-    # إجبار Word على تطبيق RTL على مستوى النص نفسه
     rPr = run._r.get_or_add_rPr()
     if rPr.find(qn("w:rtl")) is None:
         rPr.append(OxmlElement("w:rtl"))
@@ -58,14 +56,13 @@ def add_rtl_run(
     return run
 
 
+# --- إعدادات صفحة Streamlit ---
 st.set_page_config(
-    page_title="مدمج الترويسة المدرسية", page_icon="📝", layout="centered"
+    page_title="الترويسة المدرسية الذكية 📝", page_icon="📝", layout="centered"
 )
 
-st.title("📝 تطبيق دمج الترويسة المدرسية الآلي")
-st.write(
-    "قم برفع ملف Word، وستتم إضافة الترويسة الرسمية وإلغاء أي ترويسة قديمة تلقائياً."
-)
+st.title("📝 الترويسة المدرسية الذكية")
+st.write("دمج وتحديث ترويسة وتذييل الملفات التعليمية تلقائياً وبشكل أنيق.")
 
 uploaded_file = st.file_uploader("اختر ملف Word (.docx)", type=["docx"])
 
@@ -79,21 +76,29 @@ with col2:
     )
     school_year = st.text_input("الموسم الدراسي:", value="2026-2027")
 
-show_all_pages = st.checkbox(
-    "هل تريد أن تظهر الترويسة في جميع الصفحات؟",
-    value=False,
-    help="عند عدم التفعيل (الافتراضي)، تظهر الترويسة في الصفحة الأولى فقط.",
-)
+col_opt1, col_opt2 = st.columns(2)
+with col_opt1:
+    show_all_pages = st.checkbox(
+        "هل تريد أن تظهر الترويسة في جميع الصفحات؟",
+        value=False,
+        help="عند عدم التفعيل (الافتراضي)، تظهر الترويسة في الصفحة الأولى فقط.",
+    )
+with col_opt2:
+    add_footer = st.checkbox(
+        "تذييل الصفحات",
+        value=False,
+        help="تفعيل إظهار تذييل الصفحات لجميع صفحات الملف (يحتوي على اسم الأستاذ والموسم الدراسي).",
+    )
 
 
-def process_docx(file_bytes, show_all_pages=False):
+def process_docx(file_bytes, show_all_pages=False, add_footer=False):
     doc = docx.Document(file_bytes)
     logo_path = get_logo_path()
 
     for section in doc.sections:
+        # --- 1. معالجة الترويسة (En-tête) ---
         clear_existing_headers(section)
 
-        # تحديد إعدادات التكرار (الصفحة الأولى فقط أو جميع الصفحات)
         if not show_all_pages:
             section.different_first_page_header_footer = True
             header = section.first_page_header
@@ -107,7 +112,7 @@ def process_docx(file_bytes, show_all_pages=False):
 
         row = tbl.rows[0]
 
-        # 1. العمود الأيمن: مادة + مستوى + موسم
+        # العمود الأيمن: مادة + مستوى + موسم
         cell_r = row.cells[0]
         set_cell_rtl(cell_r)
         p_r = cell_r.paragraphs[0]
@@ -117,7 +122,7 @@ def process_docx(file_bytes, show_all_pages=False):
         )
         add_rtl_run(p_r, right_text, font_size=11, bold=True)
 
-        # 2. العمود الأوسط: صورة الشعار فقط (logo.jpg / logo.png)
+        # العمود الأوسط: صورة الشعار فقط
         cell_c = row.cells[1]
         set_cell_rtl(cell_c)
         p_c = cell_c.paragraphs[0]
@@ -128,7 +133,7 @@ def process_docx(file_bytes, show_all_pages=False):
             except Exception:
                 pass
 
-        # 3. العمود الأيسر: مديرية + ثانوية + أستاذ
+        # العمود الأيسر: مديرية + ثانوية + أستاذ
         cell_l = row.cells[2]
         set_cell_rtl(cell_l)
         p_l = cell_l.paragraphs[0]
@@ -136,10 +141,56 @@ def process_docx(file_bytes, show_all_pages=False):
         left_text = f"المديرية الإقليمية تاونات\nثانوية أولاد داود التأهيلية\nالأستاذ: {teacher_name}"
         add_rtl_run(p_l, left_text, font_size=11, bold=True)
 
-        # مسافة فاصلة تعادل سطرين أسفل الترويسة لتفادي التداخل مع متن الملف
+        # مسافة فاصلة أسفل الترويسة
         p_space = header.add_paragraph()
         p_space.paragraph_format.space_before = Pt(0)
         p_space.paragraph_format.space_after = Pt(24)
+
+        # --- 2. معالجة تذييل الصفحات (Pied de page) ---
+        if add_footer:
+            footers_to_process = [section.footer]
+            if section.different_first_page_header_footer:
+                footers_to_process.append(section.first_page_footer)
+
+            for footer_target in footers_to_process:
+                # مسح التذييل القديم
+                for p in list(footer_target.paragraphs):
+                    p._p.getparent().remove(p._p)
+                for t in list(footer_target.tables):
+                    t._tbl.getparent().remove(t._tbl)
+
+                # إضافة جدول التذييل (عمودان لتوزيع الأستاذ والموسم الدراسي مع وجود مسافة بينهما)
+                tbl_footer = footer_target.add_table(
+                    rows=1, cols=2, width=Inches(7.2)
+                )
+                tbl_footer.alignment = WD_TABLE_ALIGNMENT.CENTER
+                tbl_footer._tbl.tblPr.append(OxmlElement("w:bidiVisual"))
+
+                row_f = tbl_footer.rows[0]
+
+                # الجهة اليمنى: اسم الأستاذ
+                cell_f_r = row_f.cells[0]
+                set_cell_rtl(cell_f_r)
+                p_f_r = cell_f_r.paragraphs[0]
+                p_f_r.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+                add_rtl_run(
+                    p_f_r,
+                    f"الأستاذ: {teacher_name}",
+                    font_size=10,
+                    bold=False,
+                )
+
+                # الجهة اليسرى: الموسم الدراسي
+                cell_f_l = row_f.cells[1]
+                set_cell_rtl(cell_f_l)
+                p_f_l = cell_f_l.paragraphs[0]
+                p_f_l.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                add_rtl_run(
+                    p_f_l,
+                    f"الموسم الدراسي: {school_year}",
+                    font_size=10,
+                    bold=False,
+                )
 
     output = io.BytesIO()
     doc.save(output)
@@ -148,7 +199,7 @@ def process_docx(file_bytes, show_all_pages=False):
 
 
 if uploaded_file and st.button("توليد الملف المحدث"):
-    processed_file = process_docx(uploaded_file, show_all_pages)
+    processed_file = process_docx(uploaded_file, show_all_pages, add_footer)
     st.success("تم تحديث الملف بنجاح!")
     st.download_button(
         label="📥 تحميل الملف الجاهز",
