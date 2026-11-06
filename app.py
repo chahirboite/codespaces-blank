@@ -62,6 +62,40 @@ def add_styled_run(
     return run
 
 
+# --- قائمة مستويات الثانوي التأهيلي المغربي ---
+LEVELS_AR = [
+    "الجذع المشترك العلمي والتكنولوجي",
+    "الجذع المشترك الأدبي والإنساني",
+    "الجذع المشترك الأصيل",
+    "الأولى بكالوريا علوم تجريبية",
+    "الأولى بكالوريا علوم رياضية",
+    "الأولى بكالوريا آداب وعلوم إنسانية",
+    "الأولى بكالوريا علوم اقتصادية وتدبير",
+    "الثانية بكالوريا علوم فيزيائية",
+    "الثانية بكالوريا علوم الحياة والأرض",
+    "الثانية بكالوريا علوم رياضية (أ / ب)",
+    "الثانية بكالوريا آداب وعلوم إنسانية",
+    "الثانية بكالوريا علوم اقتصادية وتدبير",
+    "تخصيص مستوى آخر...",
+]
+
+LEVELS_FR = [
+    "Tronc Commun Scientifique et Technologique",
+    "Tronc Commun Lettres et Sciences Humaines",
+    "Tronc Commun Enseignement Originel",
+    "1ère Bac Sciences Expérimentales",
+    "1ère Bac Sciences Mathématiques",
+    "1ère Bac Lettres et Sciences Humaines",
+    "1ère Bac Sciences Économiques et Gestion",
+    "2ème Bac Sciences Physiques",
+    "2ème Bac Sciences de la Vie et de la Terre (SVT)",
+    "2ème Bac Sciences Mathématiques (A / B)",
+    "2ème Bac Lettres et Sciences Humaines",
+    "2ème Bac Sciences Économiques et Gestion",
+    "Autre niveau...",
+]
+
+
 # --- إعدادات صفحة Streamlit ---
 st.set_page_config(
     page_title="الترويسة المدرسية الذكية 📝", page_icon="📝", layout="centered"
@@ -80,14 +114,8 @@ lang = st.radio(
 )
 is_arabic = lang == "العربية"
 
-# تعيين القيم الافتراضية بناءً على اللغة المختارة
 default_teacher = "ذ. عثمان شهير" if is_arabic else "Pr. Othmane Chahir"
 default_subject = "الرياضيات" if is_arabic else "Mathématiques"
-default_class = (
-    "الجذع المشترك العلمي والتكنولوجي"
-    if is_arabic
-    else "Tronc Commun Scientifique"
-)
 default_year = "2026-2027"
 
 col1, col2 = st.columns(2)
@@ -96,10 +124,25 @@ with col1:
         "اسم الأستاذ / Professeur:", value=default_teacher
     )
     subject = st.text_input("المادة / Matière:", value=default_subject)
+
 with col2:
-    class_level = st.text_input(
-        "المستوى / القسم - Niveau:", value=default_class
+    # القائمة المنسدلة الخاصة بمستويات الثانوي التأهيلي
+    levels_options = LEVELS_AR if is_arabic else LEVELS_FR
+    selected_level = st.selectbox(
+        "المستوى / القسم - Niveau:",
+        options=levels_options,
+        index=0,
     )
+
+    # في حال اختيار "تخصيص مستوى آخر..." يظهر حقل إدخال يدوي
+    if selected_level in ["تخصيص مستوى آخر...", "Autre niveau..."]:
+        class_level = st.text_input(
+            "أدخل اسم المستوى / Autre niveau:",
+            value=""
+        )
+    else:
+        class_level = selected_level
+
     school_year = st.text_input(
         "الموسم الدراسي / Année scolaire:", value=default_year
     )
@@ -139,13 +182,11 @@ def process_docx(
         tbl = header.add_table(rows=1, cols=3, width=Inches(7.2))
         tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
 
-        # تطبيق اتجاه الجدول الخاص بالعربية
         if is_arabic:
             tbl._tbl.tblPr.append(OxmlElement("w:bidiVisual"))
 
         row = tbl.rows[0]
 
-        # صياغة النصوص حسب اللغة
         if is_arabic:
             right_text = (
                 f"مادة {subject}\n{class_level}\nالموسم الدراسي: {school_year}"
@@ -155,7 +196,7 @@ def process_docx(
             left_text = f"Direction Provinciale: Taounate\nLycée Qualifiant Oulad Daoud\nProfesseur: {teacher_name}"
             right_text = f"Matière: {subject}\nNiveau: {class_level}\nAnnée scolaire: {school_year}"
 
-        # العمود الأيمن (في العربية: مادة/مستوى | في الفرنسية: مادة/مستوى)
+        # العمود الأول
         cell_0 = row.cells[0]
         if is_arabic:
             set_cell_rtl(cell_0)
@@ -183,7 +224,7 @@ def process_docx(
             except Exception:
                 pass
 
-        # العمود الأيسر (في العربية: مديرية/أستاذ | في الفرنسية: مديرية/أستاذ)
+        # العمود الثالث
         cell_2 = row.cells[2]
         if is_arabic:
             set_cell_rtl(cell_2)
@@ -199,7 +240,7 @@ def process_docx(
             bold=True,
         )
 
-        # مسافة فاصلة أسفل الترويسة لتفادي التداخل
+        # مسافة فاصلة أسفل الترويسة
         p_space = header.add_paragraph()
         p_space.paragraph_format.space_before = Pt(0)
         p_space.paragraph_format.space_after = Pt(24)
