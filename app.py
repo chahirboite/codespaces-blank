@@ -1,4 +1,5 @@
 import io
+import os
 import docx
 import streamlit as st
 from docx.enum.table import WD_ALIGN_VERTICAL, WD_TABLE_ALIGNMENT
@@ -9,12 +10,19 @@ from docx.shared import Inches, Pt
 
 def clear_existing_headers(section):
     section.header.is_linked_to_previous = False
-    # مسح الترويسة الرئيسية وترويسة الصفحة الأولى
     for h in [section.header, section.first_page_header]:
         for p in list(h.paragraphs):
             p._p.getparent().remove(p._p)
         for t in list(h.tables):
             t._tbl.getparent().remove(t._tbl)
+
+
+def get_logo_path():
+    """البحث عن ملف الصورة سواء كان logo.jpg أو logo.png"""
+    for filename in ["logo.jpg", "logo.png", "logo.jpeg", "LOGO.JPG", "LOGO.PNG"]:
+        if os.path.exists(filename):
+            return filename
+    return None
 
 
 st.set_page_config(
@@ -38,7 +46,6 @@ with col2:
     )
     school_year = st.text_input("الموسم الدراسي:", value="2026-2027")
 
-# إضافة خيار التكرار (الافتراضي: صفحة واحدة فقط)
 show_all_pages = st.checkbox(
     "هل تريد أن تظهر الترويسة في جميع الصفحات؟",
     value=False,
@@ -48,12 +55,11 @@ show_all_pages = st.checkbox(
 
 def process_docx(file_bytes, show_all_pages=False):
     doc = docx.Document(file_bytes)
-    logo_path = "logo.png"
+    logo_path = get_logo_path()
 
     for section in doc.sections:
         clear_existing_headers(section)
 
-        # التحكم في تطبيق الترويسة (الصفحة الأولى فقط أو جميع الصفحات)
         if not show_all_pages:
             section.different_first_page_header_footer = True
             header = section.first_page_header
@@ -67,7 +73,7 @@ def process_docx(file_bytes, show_all_pages=False):
 
         row = tbl.rows[0]
 
-        # 1. العمود الأيمن: المادة والمستوى والموسم (مع التوجيه العربي الصحيح)
+        # العمود الأيمن: بيانات المادة والقسم
         p_r = row.cells[0].paragraphs[0]
         p_r.alignment = WD_ALIGN_PARAGRAPH.RIGHT
         p_r.paragraph_format.bidi = True
@@ -75,16 +81,17 @@ def process_docx(file_bytes, show_all_pages=False):
             f"مادة {subject}\n{class_level}\nالموسم الدراسي: {school_year}"
         )
 
-        # 2. العمود الأوسط: الشعار فقط (بدون أي نصوص إضافية)
-        try:
-            p_c = row.cells[1].paragraphs[0]
-            p_c.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            p_c.paragraph_format.bidi = True
-            p_c.add_run().add_picture(logo_path, width=Inches(1.8))
-        except Exception:
-            pass
+        # العمود الأوسط: إدراج الصورة (logo.jpg / logo.png)
+        if logo_path:
+            try:
+                p_c = row.cells[1].paragraphs[0]
+                p_c.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                p_c.paragraph_format.bidi = True
+                p_c.add_run().add_picture(logo_path, width=Inches(1.8))
+            except Exception:
+                pass
 
-        # 3. العمود الأيسر: المديرية والمؤسسة والأستاذ
+        # العمود الأيسر: بيانات المؤسسة والأستاذ
         p_l = row.cells[2].paragraphs[0]
         p_l.alignment = WD_ALIGN_PARAGRAPH.LEFT
         p_l.paragraph_format.bidi = True
@@ -92,7 +99,7 @@ def process_docx(file_bytes, show_all_pages=False):
             f"المديرية الإقليمية تاونات\nثانوية أولاد داود التأهيلية\nالأستاذ: {teacher_name}"
         )
 
-        # ترك مسافة فاصلة تعادل سطرين أسفل الترويسة لمنع التداخل مع النص
+        # مسافة فاصلة أسفل الترويسة لمنع التداخل مع النص
         p_space = header.add_paragraph()
         p_space.paragraph_format.space_before = Pt(0)
         p_space.paragraph_format.space_after = Pt(24)
