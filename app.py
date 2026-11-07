@@ -200,20 +200,16 @@ def process_docx(
     uploaded_logo=None,
     header_space=18,
 ):
-    # قراءة بيانات الملف المرفوع بشكل صحيح
     file_bytes = uploaded_file_obj.getvalue()
     doc = docx.Document(io.BytesIO(file_bytes))
     logo_file = get_logo_bytes(uploaded_logo)
 
     for section in doc.sections:
-        # ضبط الهامش العلوي ومسافة الترويسة لضمان عدم التداخل مع محتوى الملف
         section.top_margin = Inches(1.25)
         section.header_distance = Inches(0.4)
 
-        # 1. تفريغ الترويسات السابقة وفك الارتباط
         clear_and_prepare_headers(section)
 
-        # 2. تحديد الترويسة المستهدفة (الصفحة الأولى فقط أم جميع الصفحات)
         if not show_all_pages:
             section.different_first_page_header_footer = True
             header = section.first_page_header
@@ -221,11 +217,9 @@ def process_docx(
             section.different_first_page_header_footer = False
             header = section.header
 
-        # 3. بناء جدول الترويسة
         tbl = header.add_table(rows=1, cols=3, width=Inches(7.2))
         tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
 
-        # إدراج وسم w:bidiVisual في المكان الصحيح (في بداية tblPr) لمنع حظر الجدول من Word
         if is_arabic:
             tbl._tbl.tblPr.insert(0, OxmlElement("w:bidiVisual"))
 
@@ -256,7 +250,7 @@ def process_docx(
             bold=True,
         )
 
-        # العمود الأوسط (إدراج الشعار)
+        # العمود الأوسط (الشعار)
         cell_1 = row.cells[1]
         if is_arabic:
             set_cell_rtl(cell_1)
@@ -291,10 +285,9 @@ def process_docx(
         p_space.paragraph_format.space_before = Pt(0)
         p_space.paragraph_format.space_after = Pt(header_space)
 
-        # تأمين هيكلية XML للترويسة
         ensure_valid_header_xml(section)
 
-        # 4. معالجة التذييل (Pied de page)
+        # معالجة التذييل (Pied de page)
         if add_footer:
             footers_to_process = [section.footer]
             if section.different_first_page_header_footer:
@@ -375,3 +368,14 @@ if uploaded_file and st.button("توليد الملف المحدث", type="prima
         file_name=f"محدث_{uploaded_file.name}",
         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     )
+
+# --- تذييل الصفحة وتوقيع المطور (حقوق التأليف) ---
+st.markdown(
+    """
+    <hr style="margin-top: 50px; margin-bottom: 15px; border: 0; border-top: 1px solid #e0e0e0;">
+    <div style="text-align: center; color: #888888; font-size: 13px; font-weight: 500; letter-spacing: 0.5px;">
+        Développeur: CHAHIR OTHMAN
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
