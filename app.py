@@ -237,7 +237,7 @@ lang = st.radio(
 )
 is_arabic = lang == "العربية"
 
-# حساب الموسم الدراسي تلقائياً خلف الكواليس (بدون إظهار خانة له في الصفحة)
+# حساب الموسم الدراسي تلقائياً خلف الكواليس
 auto_school_year = get_auto_school_year()
 
 # حقول الإدخال الأساسية
@@ -246,7 +246,7 @@ with col1:
     teacher_name = st.text_input(
         "اسم الأستاذ / Professeur:",
         value="",
-        placeholder="مثال: ذ. عثمان شهير" if is_arabic else "Ex: Pr. Othmane Chahir",
+        placeholder="مثال: عثمان شهير" if is_arabic else "Ex: Othmane Chahir",
     )
     subject = st.text_input(
         "المادة / Matière:",
@@ -326,7 +326,7 @@ def process_docx(
     t_name = (
         teacher_name_val.strip()
         if teacher_name_val.strip()
-        else ("ذ. عثمان شهير" if is_arabic else "Pr. Othmane Chahir")
+        else ("عثمان شهير" if is_arabic else "Othmane Chahir")
     )
     subj = (
         subject_val.strip()
@@ -506,7 +506,7 @@ if uploaded_file and st.button("🚀 توليد الملف المحدث"):
         teacher_name_val=teacher_name,
         subject_val=subject,
         class_level_val=class_level,
-        school_year_val=auto_school_year,  # إرسال الموسم الدراسي المحسوب أوتوماتيكياً
+        school_year_val=auto_school_year,
         show_all_pages=show_all_pages,
         add_footer=add_footer,
         is_arabic=is_arabic,
