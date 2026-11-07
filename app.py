@@ -19,8 +19,11 @@ def clear_existing_headers(section):
             t._tbl.getparent().remove(t._tbl)
 
 
-def get_logo_path():
-    """البحث عن ملف الشعار تلقائياً"""
+def get_logo_file(uploaded_logo):
+    """تحديد مصدر الشعار: الملف المرفوع أو الصورة المحلية"""
+    if uploaded_logo is not None:
+        return io.BytesIO(uploaded_logo.getvalue())
+
     for filename in ["logo.jpg", "logo.png", "logo.jpeg", "LOGO.JPG", "LOGO.PNG"]:
         if os.path.exists(filename):
             return filename
@@ -104,8 +107,6 @@ st.set_page_config(
 st.title("📝 الترويسة المدرسية الذكية")
 st.write("دمج وتحديث ترويسة وتذييل الملفات التعليمية تلقائياً وبشكل أنيق.")
 
-uploaded_file = st.file_uploader("اختر ملف Word (.docx)", type=["docx"])
-
 # اختيار لغة الترويسة
 lang = st.radio(
     "لغة الترويسة / Langue de l'en-tête:",
@@ -113,6 +114,18 @@ lang = st.radio(
     horizontal=True,
 )
 is_arabic = lang == "العربية"
+
+col_file1, col_file2 = st.columns(2)
+with col_file1:
+    uploaded_file = st.file_uploader(
+        "اختر ملف Word (.docx):", type=["docx"]
+    )
+with col_file2:
+    uploaded_logo = st.file_uploader(
+        "رفع شعار المؤسسة (اختياري) / Logo:",
+        type=["jpg", "png", "jpeg"],
+        help="في حال عدم رفع شعار، سيتم اعتماد logo.jpg تلقائياً إن وجد.",
+    )
 
 default_teacher = "ذ. عثمان شهير" if is_arabic else "Pr. Othmane Chahir"
 default_subject = "الرياضيات" if is_arabic else "Mathématiques"
@@ -126,7 +139,6 @@ with col1:
     subject = st.text_input("المادة / Matière:", value=default_subject)
 
 with col2:
-    # القائمة المنسدلة الخاصة بمستويات الثانوي التأهيلي
     levels_options = LEVELS_AR if is_arabic else LEVELS_FR
     selected_level = st.selectbox(
         "المستوى / القسم - Niveau:",
@@ -134,11 +146,9 @@ with col2:
         index=0,
     )
 
-    # في حال اختيار "تخصيص مستوى آخر..." يظهر حقل إدخال يدوي
     if selected_level in ["تخصيص مستوى آخر...", "Autre niveau..."]:
         class_level = st.text_input(
-            "أدخل اسم المستوى / Autre niveau:",
-            value=""
+            "أدخل اسم المستوى / Autre niveau:", value=""
         )
     else:
         class_level = selected_level
@@ -147,10 +157,12 @@ with col2:
         "الموسم الدراسي / Année scolaire:", value=default_year
     )
 
+st.subheader("⚙️ خيارات التنسيق والهوامش")
+
 col_opt1, col_opt2 = st.columns(2)
 with col_opt1:
     show_all_pages = st.checkbox(
-        "هل تريد أن تظهر الترويسة في جميع الصفحات؟",
+        "إظهار الترويسة في جميع الصفحات",
         value=False,
         help="عند عدم التفعيل (الافتراضي)، تظهر الترويسة في الصفحة الأولى فقط.",
     )
@@ -158,15 +170,30 @@ with col_opt2:
     add_footer = st.checkbox(
         "تذييل الصفحات / Pied de page",
         value=False,
-        help="تفعيل إظهار تذييل الصفحات لجميع صفحات الملف (يحتوي على اسم الأستاذ والموسم الدراسي).",
+        help="تفعيل إظهار تذييل الصفحات لجميع صفحات الملف.",
     )
+
+# 5. التحكم في المسافة الفاصلة لترشيد استهلاك الورق
+header_space = st.slider(
+    "المسافة الفاصلة أسفل الترويسة (نقطة) / Espace sous l'en-tête (pt):",
+    min_value=6,
+    max_value=36,
+    value=18,
+    step=3,
+    help="اختر قيمة أصغر (مثل 6pt أو 12pt) لتوفير المساحة وتجنب ترحيل الأسطر للصفحة التالية عند الطباعة.",
+)
 
 
 def process_docx(
-    file_bytes, show_all_pages=False, add_footer=False, is_arabic=True
+    file_bytes,
+    show_all_pages=False,
+    add_footer=False,
+    is_arabic=True,
+    uploaded_logo=None,
+    header_space=18,
 ):
     doc = docx.Document(file_bytes)
-    logo_path = get_logo_path()
+    logo_file = get_logo_file(uploaded_logo)
 
     for section in doc.sections:
         # --- 1. معالجة الترويسة (En-tête) ---
@@ -218,9 +245,11 @@ def process_docx(
             set_cell_rtl(cell_1)
         p_1 = cell_1.paragraphs[0]
         p_1.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        if logo_path:
+        if logo_file:
             try:
-                p_1.add_run().add_picture(logo_path, width=Inches(1.8))
+                if isinstance(logo_file, io.BytesIO):
+                    logo_file.seek(0)
+                p_1.add_run().add_picture(logo_file, width=Inches(1.8))
             except Exception:
                 pass
 
@@ -240,10 +269,10 @@ def process_docx(
             bold=True,
         )
 
-        # مسافة فاصلة أسفل الترويسة
+        # مسافة فاصلة قابلة للتعديل أسفل الترويسة
         p_space = header.add_paragraph()
         p_space.paragraph_format.space_before = Pt(0)
-        p_space.paragraph_format.space_after = Pt(24)
+        p_space.paragraph_format.space_after = Pt(header_space)
 
         # --- 2. معالجة تذييل الصفحات (Pied de page) ---
         if add_footer:
@@ -310,9 +339,14 @@ def process_docx(
     return output
 
 
-if uploaded_file and st.button("توليد الملف المحدث"):
+if uploaded_file and st.button("توليد الملف المحدث", type="primary"):
     processed_file = process_docx(
-        uploaded_file, show_all_pages, add_footer, is_arabic
+        file_bytes=uploaded_file,
+        show_all_pages=show_all_pages,
+        add_footer=add_footer,
+        is_arabic=is_arabic,
+        uploaded_logo=uploaded_logo,
+        header_space=header_space,
     )
     st.success("تم تحديث الملف بنجاح!")
     st.download_button(
