@@ -52,6 +52,28 @@ def clear_and_prepare_headers(section):
             p._p.getparent().remove(p._p)
 
 
+def clear_all_footers_completely(section):
+    """حذف وتفريغ جميع التذييلات والخطوط القديمة نهائياً عند إلغاء تفعيل التذييل"""
+    section.footer.is_linked_to_previous = False
+    section.first_page_footer.is_linked_to_previous = False
+
+    for f in [section.footer, section.first_page_footer]:
+        for t in list(f.tables):
+            t._tbl.getparent().remove(t._tbl)
+        for p in list(f.paragraphs):
+            p._p.getparent().remove(p._p)
+
+        # إضافة فقرة فارغة نظيفة تماماً بدون حدود أو خطوط
+        p_clean = f.add_paragraph()
+        p_clean.paragraph_format.space_before = Pt(0)
+        p_clean.paragraph_format.space_after = Pt(0)
+
+        pPr = p_clean._p.get_or_add_pPr()
+        pBdr = pPr.find(qn("w:pBdr"))
+        if pBdr is not None:
+            pPr.remove(pBdr)
+
+
 def ensure_valid_header_xml(section):
     """ضمان وجود فقرة واحدة على الأقل في الترويسات غير المستعملة لمنع تلف XML"""
     for h in [section.header, section.first_page_header]:
@@ -132,10 +154,10 @@ st.set_page_config(
     page_title="الترويسة المدرسية الذكية 📝", page_icon="📝", layout="centered"
 )
 
-# 1. حجز الحاوية الأولى في أعلى الصفحة للعنوان والشعار
+# 1. حاوية عنوان الصفحة
 header_container = st.container()
 
-# 2. أزرار وحقول رفع الملفات (تأتي بعد العنوان)
+# 2. أزرار وحقول رفع الملفات
 col_file1, col_file2 = st.columns(2)
 with col_file1:
     uploaded_file = st.file_uploader(
@@ -148,7 +170,7 @@ with col_file2:
         help="سيظهر الشعار في الترويسة وكخلفية هادئة خلف عنوان الصفحة.",
     )
 
-# 3. بناء عنوان الصفحة مع الخلفية الشفافة (10% Opacity)
+# 3. خلفية الشعار الشفافة خلف العنوان
 base64_logo = get_base64_logo(uploaded_logo)
 bg_style = ""
 if base64_logo:
@@ -179,7 +201,6 @@ with header_container:
         unsafe_allow_html=True,
     )
 
-# تحسين تنسيقات Streamlit العامة
 st.markdown(
     """
     <style>
@@ -308,7 +329,7 @@ def process_docx(
         if is_arabic:
             tblPr.insert(0, OxmlElement("w:bidiVisual"))
 
-        # إضافة خط سفلي مخصص باللون المختار
+        # إضافة خط سفلي مخصص للترويسة
         tblBorders = OxmlElement("w:tblBorders")
         bottom_border = OxmlElement("w:bottom")
         bottom_border.set(qn("w:val"), "single")
@@ -320,7 +341,6 @@ def process_docx(
 
         row = tbl.rows[0]
 
-        # ضبط التناظر والمحاذاة العمودية للأعمدة
         col_widths = [Inches(2.8), Inches(1.6), Inches(2.8)]
         for i, cell in enumerate(row.cells):
             cell.width = col_widths[i]
@@ -381,7 +401,7 @@ def process_docx(
             bold=True,
         )
 
-        # مسافة فاصلة أسفل الجدول
+        # مسافة فاصلة أسفل الترويسة
         p_space = header.add_paragraph()
         p_space.paragraph_format.space_before = Pt(0)
         p_space.paragraph_format.space_after = Pt(header_space)
@@ -441,6 +461,9 @@ def process_docx(
                     add_styled_run(
                         p_f_r, teacher_name, is_arabic, font_size=10, bold=False
                     )
+        else:
+            # تنظيف وإزالة جميع التذييلات والخطوط السابقة عند عدم تفعيل التذييل
+            clear_all_footers_completely(section)
 
     output = io.BytesIO()
     doc.save(output)
