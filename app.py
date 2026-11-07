@@ -63,7 +63,6 @@ def clear_all_footers_completely(section):
         for p in list(f.paragraphs):
             p._p.getparent().remove(p._p)
 
-        # إضافة فقرة فارغة نظيفة تماماً بدون حدود أو خطوط
         p_clean = f.add_paragraph()
         p_clean.paragraph_format.space_before = Pt(0)
         p_clean.paragraph_format.space_after = Pt(0)
@@ -170,7 +169,7 @@ with col_file2:
         help="سيظهر الشعار في الترويسة وكخلفية هادئة خلف عنوان الصفحة.",
     )
 
-# 3. خلفية الشعار الشفافة خلف العنوان
+# 3. خلفية الشعار الشفافة خلف العنوان وتعديل لون الوصف ليكون داكناً
 base64_logo = get_base64_logo(uploaded_logo)
 bg_style = ""
 if base64_logo:
@@ -193,7 +192,7 @@ with header_container:
             <h1 style="color: #1e293b; margin: 0; font-size: 2.1rem; font-weight: 800; font-family: 'Segoe UI', Tahoma, Geneva, sans-serif;">
                 📝 الترويسة المدرسية الذكية
             </h1>
-            <p style="color: #64748b; margin-top: 8px; margin-bottom: 0; font-size: 1rem; font-weight: 500;">
+            <p style="color: #1e293b; margin-top: 8px; margin-bottom: 0; font-size: 1.05rem; font-weight: 700;">
                 دمج وتحديث ترويسة وتذييل الملفات التعليمية تلقائياً وبشكل أنيق
             </p>
         </div>
@@ -229,16 +228,19 @@ lang = st.radio(
 )
 is_arabic = lang == "العربية"
 
-default_teacher = "ذ. عثمان شهير" if is_arabic else "Pr. Othmane Chahir"
-default_subject = "الرياضيات" if is_arabic else "Mathématiques"
-default_year = "2026-2027"
-
+# حقول الإدخال مع نصوص إرشادية فقط (Placeholders) دون تعبئة تلقائية
 col1, col2 = st.columns(2)
 with col1:
     teacher_name = st.text_input(
-        "اسم الأستاذ / Professeur:", value=default_teacher
+        "اسم الأستاذ / Professeur:",
+        value="",
+        placeholder="مثال: ذ. عثمان شهير" if is_arabic else "Ex: Pr. Othmane Chahir",
     )
-    subject = st.text_input("المادة / Matière:", value=default_subject)
+    subject = st.text_input(
+        "المادة / Matière:",
+        value="",
+        placeholder="مثال: الرياضيات" if is_arabic else "Ex: Mathématiques",
+    )
 
 with col2:
     levels_options = LEVELS_AR if is_arabic else LEVELS_FR
@@ -250,13 +252,17 @@ with col2:
 
     if selected_level in ["تخصيص مستوى آخر...", "Autre niveau..."]:
         class_level = st.text_input(
-            "أدخل اسم المستوى / Autre niveau:", value=""
+            "أدخل اسم المستوى / Autre niveau:",
+            value="",
+            placeholder="أدخل اسم المستوى..." if is_arabic else "Saisir le niveau...",
         )
     else:
         class_level = selected_level
 
     school_year = st.text_input(
-        "الموسم الدراسي / Année scolaire:", value=default_year
+        "الموسم الدراسي / Année scolaire:",
+        value="",
+        placeholder="مثال: 2026-2027" if is_arabic else "Ex: 2026-2027",
     )
 
 st.subheader("⚙️ خيارات التنسيق والهوامش")
@@ -295,6 +301,10 @@ with col_sp2:
 
 def process_docx(
     uploaded_file_obj,
+    teacher_name_val,
+    subject_val,
+    class_level_val,
+    school_year_val,
     show_all_pages=False,
     add_footer=False,
     is_arabic=True,
@@ -305,6 +315,22 @@ def process_docx(
     file_bytes = uploaded_file_obj.getvalue()
     doc = docx.Document(io.BytesIO(file_bytes))
     logo_file = get_logo_bytes(uploaded_logo)
+
+    # قيم افتراضية في حال ترك الأستاذ الحقول فارغة عند التوليد
+    t_name = (
+        teacher_name_val.strip()
+        if teacher_name_val.strip()
+        else ("ذ. عثمان شهير" if is_arabic else "Pr. Othmane Chahir")
+    )
+    subj = (
+        subject_val.strip()
+        if subject_val.strip()
+        else ("الرياضيات" if is_arabic else "Mathématiques")
+    )
+    c_level = class_level_val.strip() if class_level_val.strip() else selected_level
+    s_year = (
+        school_year_val.strip() if school_year_val.strip() else "2026-2027"
+    )
 
     clean_hex = border_color_hex.lstrip("#")
 
@@ -348,12 +374,12 @@ def process_docx(
 
         if is_arabic:
             right_text = (
-                f"مادة {subject}\n{class_level}\nالموسم الدراسي: {school_year}"
+                f"مادة {subj}\n{c_level}\nالموسم الدراسي: {s_year}"
             )
-            left_text = f"المديرية الإقليمية تاونات\nثانوية أولاد داود التأهيلية\nالأستاذ: {teacher_name}"
+            left_text = f"المديرية الإقليمية تاونات\nثانوية أولاد داود التأهيلية\nالأستاذ: {t_name}"
         else:
-            left_text = f"Direction Provinciale: Taounate\nLycée Qualifiant Oulad Daoud\nProfesseur: {teacher_name}"
-            right_text = f"Matière: {subject}\nNiveau: {class_level}\nAnnée scolaire: {school_year}"
+            left_text = f"Direction Provinciale: Taounate\nLycée Qualifiant Oulad Daoud\nProfesseur: {t_name}"
+            right_text = f"Matière: {subj}\nNiveau: {c_level}\nAnnée scolaire: {s_year}"
 
         # العمود الأول
         cell_0 = row.cells[0]
@@ -437,7 +463,7 @@ def process_docx(
                     p_f_r = cell_f_r.paragraphs[0]
                     p_f_r.alignment = WD_ALIGN_PARAGRAPH.RIGHT
                     add_styled_run(
-                        p_f_r, teacher_name, is_arabic, font_size=10, bold=False
+                        p_f_r, t_name, is_arabic, font_size=10, bold=False
                     )
 
                     cell_f_l = row_f.cells[1]
@@ -445,24 +471,23 @@ def process_docx(
                     p_f_l = cell_f_l.paragraphs[0]
                     p_f_l.alignment = WD_ALIGN_PARAGRAPH.LEFT
                     add_styled_run(
-                        p_f_l, school_year, is_arabic, font_size=10, bold=False
+                        p_f_l, s_year, is_arabic, font_size=10, bold=False
                     )
                 else:
                     cell_f_l = row_f.cells[0]
                     p_f_l = cell_f_l.paragraphs[0]
                     p_f_l.alignment = WD_ALIGN_PARAGRAPH.LEFT
                     add_styled_run(
-                        p_f_l, school_year, is_arabic, font_size=10, bold=False
+                        p_f_l, s_year, is_arabic, font_size=10, bold=False
                     )
 
                     cell_f_r = row_f.cells[1]
                     p_f_r = cell_f_r.paragraphs[0]
                     p_f_r.alignment = WD_ALIGN_PARAGRAPH.RIGHT
                     add_styled_run(
-                        p_f_r, teacher_name, is_arabic, font_size=10, bold=False
+                        p_f_r, t_name, is_arabic, font_size=10, bold=False
                     )
         else:
-            # تنظيف وإزالة جميع التذييلات والخطوط السابقة عند عدم تفعيل التذييل
             clear_all_footers_completely(section)
 
     output = io.BytesIO()
@@ -474,6 +499,10 @@ def process_docx(
 if uploaded_file and st.button("🚀 توليد الملف المحدث"):
     processed_file = process_docx(
         uploaded_file_obj=uploaded_file,
+        teacher_name_val=teacher_name,
+        subject_val=subject,
+        class_level_val=class_level,
+        school_year_val=school_year,
         show_all_pages=show_all_pages,
         add_footer=add_footer,
         is_arabic=is_arabic,
