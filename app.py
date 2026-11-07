@@ -12,7 +12,7 @@ from docx.shared import Inches, Pt
 
 
 def get_auto_school_year():
-    """حساب الموسم الدراسي تلقائياً بناءً على تاريخ توليد الملف"""
+    """حساب الموسم الدراسي تلقائياً أوتوماتيكياً خلف الكواليس"""
     today = datetime.date.today()
     current_year = today.year
     if today.month < 9:
@@ -165,7 +165,7 @@ st.set_page_config(
 # 1. حاوية عنوان الصفحة
 header_container = st.container()
 
-# 2. بناء خلفية العنوان الثابتة (تعتمد حصرياً على الشعار المحلي الثابت)
+# 2. بناء خلفية العنوان الثابتة
 static_logo_uri = get_static_logo_data_uri()
 bg_style = ""
 if static_logo_uri:
@@ -237,10 +237,10 @@ lang = st.radio(
 )
 is_arabic = lang == "العربية"
 
-# حساب الموسم الدراسي تلقائياً
-auto_year = get_auto_school_year()
+# حساب الموسم الدراسي تلقائياً خلف الكواليس (بدون إظهار خانة له في الصفحة)
+auto_school_year = get_auto_school_year()
 
-# حقول الإدخال
+# حقول الإدخال الأساسية
 col1, col2 = st.columns(2)
 with col1:
     teacher_name = st.text_input(
@@ -270,13 +270,6 @@ with col2:
         )
     else:
         class_level = selected_level
-
-    # الموسم الدراسي يُحسب أوتوماتيكياً ويكون ثابتاً ولكن قابلاً للتعديل
-    school_year = st.text_input(
-        "الموسم الدراسي / Année scolaire:",
-        value=auto_year,
-        help="تم حسابه أوتوماتيكياً بناءً على التاريخ الحالي، ويمكنك تعديله إذا أردت.",
-    )
 
 st.subheader("⚙️ خيارات التنسيق والهوامش")
 
@@ -341,9 +334,7 @@ def process_docx(
         else ("الرياضيات" if is_arabic else "Mathématiques")
     )
     c_level = class_level_val.strip() if class_level_val.strip() else selected_level
-    s_year = (
-        school_year_val.strip() if school_year_val.strip() else auto_year
-    )
+    s_year = school_year_val
 
     clean_hex = border_color_hex.lstrip("#")
 
@@ -515,7 +506,7 @@ if uploaded_file and st.button("🚀 توليد الملف المحدث"):
         teacher_name_val=teacher_name,
         subject_val=subject,
         class_level_val=class_level,
-        school_year_val=school_year,
+        school_year_val=auto_school_year,  # إرسال الموسم الدراسي المحسوب أوتوماتيكياً
         show_all_pages=show_all_pages,
         add_footer=add_footer,
         is_arabic=is_arabic,
