@@ -1,4 +1,5 @@
 import base64
+import datetime
 import io
 import os
 import docx
@@ -8,6 +9,16 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Inches, Pt
+
+
+def get_auto_school_year():
+    """حساب الموسم الدراسي تلقائياً بناءً على تاريخ توليد الملف"""
+    today = datetime.date.today()
+    current_year = today.year
+    if today.month < 9:
+        return f"{current_year - 1}-{current_year}"
+    else:
+        return f"{current_year}-{current_year + 1}"
 
 
 def get_static_logo_data_uri():
@@ -226,7 +237,10 @@ lang = st.radio(
 )
 is_arabic = lang == "العربية"
 
-# حقول الإدخال مع نصوص إرشادية (Placeholders)
+# حساب الموسم الدراسي تلقائياً
+auto_year = get_auto_school_year()
+
+# حقول الإدخال
 col1, col2 = st.columns(2)
 with col1:
     teacher_name = st.text_input(
@@ -257,10 +271,11 @@ with col2:
     else:
         class_level = selected_level
 
+    # الموسم الدراسي يُحسب أوتوماتيكياً ويكون ثابتاً ولكن قابلاً للتعديل
     school_year = st.text_input(
         "الموسم الدراسي / Année scolaire:",
-        value="",
-        placeholder="مثال: 2026-2027" if is_arabic else "Ex: 2026-2027",
+        value=auto_year,
+        help="تم حسابه أوتوماتيكياً بناءً على التاريخ الحالي، ويمكنك تعديله إذا أردت.",
     )
 
 st.subheader("⚙️ خيارات التنسيق والهوامش")
@@ -327,7 +342,7 @@ def process_docx(
     )
     c_level = class_level_val.strip() if class_level_val.strip() else selected_level
     s_year = (
-        school_year_val.strip() if school_year_val.strip() else "2026-2027"
+        school_year_val.strip() if school_year_val.strip() else auto_year
     )
 
     clean_hex = border_color_hex.lstrip("#")
