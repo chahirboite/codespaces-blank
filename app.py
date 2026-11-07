@@ -22,16 +22,18 @@ def get_logo_bytes(uploaded_logo):
 
 
 def get_base64_logo(uploaded_logo):
-    """تحويل صورة الشعار إلى Base64 لاستخدامها كخلفية للموقع"""
+    """تحويل صورة الشعار إلى Base64 لاستخدامها كخلفية شفافة خلف العنوان"""
     logo = get_logo_bytes(uploaded_logo)
     if logo:
         try:
             if isinstance(logo, io.BytesIO):
                 logo.seek(0)
                 encoded = base64.b64encode(logo.read()).decode()
-            else:
+            elif isinstance(logo, str) and os.path.exists(logo):
                 with open(logo, "rb") as f:
                     encoded = base64.b64encode(f.read()).decode()
+            else:
+                return None
             return encoded
         except Exception:
             return None
@@ -130,7 +132,10 @@ st.set_page_config(
     page_title="الترويسة المدرسية الذكية 📝", page_icon="📝", layout="centered"
 )
 
-# رفع الملفات أولاً لمعرفة ما إذا كان هناك شعار للخلفية
+# 1. حجز الحاوية الأولى في أعلى الصفحة للعنوان والشعار
+header_container = st.container()
+
+# 2. أزرار وحقول رفع الملفات (تأتي بعد العنوان)
 col_file1, col_file2 = st.columns(2)
 with col_file1:
     uploaded_file = st.file_uploader(
@@ -140,49 +145,46 @@ with col_file2:
     uploaded_logo = st.file_uploader(
         "🖼️ رفع شعار المؤسسة (اختياري):",
         type=["jpg", "png", "jpeg"],
-        help="سيظهر الشعار في الترويسة وكخلفية هادئة للموقع.",
+        help="سيظهر الشعار في الترويسة وكخلفية هادئة خلف عنوان الصفحة.",
     )
 
-# تطبيق الخلفية الشفافة CSS (10% Opacity)
+# 3. بناء عنوان الصفحة مع الخلفية الشفافة (10% Opacity)
 base64_logo = get_base64_logo(uploaded_logo)
-bg_css = ""
+bg_style = ""
 if base64_logo:
-    bg_css = f"""
-    .stApp::before {{
-        content: "";
-        position: fixed;
-        top: 0; left: 0; width: 100%; height: 100%;
-        background-image: url('data:image/png;base64,{base64_logo}');
-        background-repeat: no-repeat;
-        background-position: center;
-        background-size: 380px;
-        opacity: 0.07;
-        z-index: -1;
-        pointer-events: none;
-    }}
-    """
+    bg_style = f"background-image: linear-gradient(rgba(248, 250, 252, 0.90), rgba(248, 250, 252, 0.90)), url('data:image/png;base64,{base64_logo}'); background-size: contain; background-repeat: no-repeat; background-position: center;"
 
-# تحسين ديزاين الواجهة بالكامل عبر CSS
+with header_container:
+    st.markdown(
+        f"""
+        <div style="
+            position: relative;
+            padding: 30px 20px;
+            border-radius: 14px;
+            text-align: center;
+            margin-bottom: 25px;
+            border: 1px solid #e2e8f0;
+            background-color: #ffffff;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.04);
+            {bg_style}
+        ">
+            <h1 style="color: #1e293b; margin: 0; font-size: 2.1rem; font-weight: 800; font-family: 'Segoe UI', Tahoma, Geneva, sans-serif;">
+                📝 الترويسة المدرسية الذكية
+            </h1>
+            <p style="color: #64748b; margin-top: 8px; margin-bottom: 0; font-size: 1rem; font-weight: 500;">
+                دمج وتحديث ترويسة وتذييل الملفات التعليمية تلقائياً وبشكل أنيق
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+# تحسين تنسيقات Streamlit العامة
 st.markdown(
-    f"""
+    """
     <style>
-    {bg_css}
-    .stApp {{
-        background-color: #f8fafc;
-    }}
-    h1 {{
-        color: #1e293b;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        text-align: center;
-        margin-bottom: 5px;
-    }}
-    .subtitle {{
-        text-align: center;
-        color: #64748b;
-        font-size: 15px;
-        margin-bottom: 25px;
-    }}
-    .stButton>button {{
+    .stApp { background-color: #f8fafc; }
+    .stButton>button {
         width: 100%;
         border-radius: 8px;
         font-weight: bold;
@@ -191,20 +193,10 @@ st.markdown(
         color: white;
         border: none;
         box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);
-        transition: all 0.2s ease-in-out;
-    }}
-    .stButton>button:hover {{
-        background-color: #1d4ed8;
-        box-shadow: 0 6px 12px -2px rgba(37, 99, 235, 0.3);
-    }}
+    }
+    .stButton>button:hover { background-color: #1d4ed8; }
     </style>
     """,
-    unsafe_allow_html=True,
-)
-
-st.markdown("<h1>📝 الترويسة المدرسية الذكية</h1>", unsafe_allow_html=True)
-st.markdown(
-    "<div class='subtitle'>دمج وتحديث ترويسة وتذييل الملفات التعليمية تلقائياً وبشكل أنيق</div>",
     unsafe_allow_html=True,
 )
 
@@ -293,7 +285,6 @@ def process_docx(
     doc = docx.Document(io.BytesIO(file_bytes))
     logo_file = get_logo_bytes(uploaded_logo)
 
-    # تحويل كود اللون HEX لاستخدامه في Word XML
     clean_hex = border_color_hex.lstrip("#")
 
     for section in doc.sections:
@@ -321,7 +312,7 @@ def process_docx(
         tblBorders = OxmlElement("w:tblBorders")
         bottom_border = OxmlElement("w:bottom")
         bottom_border.set(qn("w:val"), "single")
-        bottom_border.set(qn("w:sz"), "8")  # سمك الخط 1pt
+        bottom_border.set(qn("w:sz"), "8")
         bottom_border.set(qn("w:space"), "0")
         bottom_border.set(qn("w:color"), clean_hex)
         tblBorders.append(bottom_border)
