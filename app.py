@@ -2,7 +2,7 @@ import io
 import os
 import docx
 import streamlit as st
-from docx.enum.table import WD_TABLE_ALIGNMENT
+from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT, WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
@@ -217,13 +217,31 @@ def process_docx(
             section.different_first_page_header_footer = False
             header = section.header
 
+        # بناء جدول الترويسة
         tbl = header.add_table(rows=1, cols=3, width=Inches(7.2))
         tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
+        tblPr = tbl._tbl.tblPr
 
         if is_arabic:
-            tbl._tbl.tblPr.insert(0, OxmlElement("w:bidiVisual"))
+            tblPr.insert(0, OxmlElement("w:bidiVisual"))
+
+        # إضافة خط سفلي أنيق وفاصل للجدول
+        tblBorders = OxmlElement("w:tblBorders")
+        bottom_border = OxmlElement("w:bottom")
+        bottom_border.set(qn("w:val"), "single")
+        bottom_border.set(qn("w:sz"), "8")  # سمك الخط 1pt
+        bottom_border.set(qn("w:space"), "0")
+        bottom_border.set(qn("w:color"), "555555")  # لون رمادي أنيق
+        tblBorders.append(bottom_border)
+        tblPr.append(tblBorders)
 
         row = tbl.rows[0]
+
+        # ضبط التناظر والمحاذاة العمودية للأعمدة
+        col_widths = [Inches(2.8), Inches(1.6), Inches(2.8)]
+        for i, cell in enumerate(row.cells):
+            cell.width = col_widths[i]
+            cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
 
         if is_arabic:
             right_text = (
@@ -234,13 +252,15 @@ def process_docx(
             left_text = f"Direction Provinciale: Taounate\nLycée Qualifiant Oulad Daoud\nProfesseur: {teacher_name}"
             right_text = f"Matière: {subject}\nNiveau: {class_level}\nAnnée scolaire: {school_year}"
 
-        # العمود الأول
+        # العمود الأول (ضبط الكشيدة والتطويل للعربية)
         cell_0 = row.cells[0]
         if is_arabic:
             set_cell_rtl(cell_0)
         p_0 = cell_0.paragraphs[0]
         p_0.alignment = (
-            WD_ALIGN_PARAGRAPH.RIGHT if is_arabic else WD_ALIGN_PARAGRAPH.LEFT
+            WD_ALIGN_PARAGRAPH.JUSTIFY
+            if is_arabic
+            else WD_ALIGN_PARAGRAPH.LEFT
         )
         add_styled_run(
             p_0,
@@ -260,17 +280,19 @@ def process_docx(
             try:
                 if isinstance(logo_file, io.BytesIO):
                     logo_file.seek(0)
-                p_1.add_run().add_picture(logo_file, width=Inches(1.8))
+                p_1.add_run().add_picture(logo_file, width=Inches(1.5))
             except Exception:
                 pass
 
-        # العمود الثالث
+        # العمود الثالث (ضبط الكشيدة والتطويل للعربية)
         cell_2 = row.cells[2]
         if is_arabic:
             set_cell_rtl(cell_2)
         p_2 = cell_2.paragraphs[0]
         p_2.alignment = (
-            WD_ALIGN_PARAGRAPH.LEFT if is_arabic else WD_ALIGN_PARAGRAPH.RIGHT
+            WD_ALIGN_PARAGRAPH.JUSTIFY
+            if is_arabic
+            else WD_ALIGN_PARAGRAPH.RIGHT
         )
         add_styled_run(
             p_2,
@@ -374,7 +396,7 @@ st.markdown(
     """
     <hr style="margin-top: 50px; margin-bottom: 15px; border: 0; border-top: 1px solid #e0e0e0;">
     <div style="text-align: center; color: #888888; font-size: 13px; font-weight: 500; letter-spacing: 0.5px;">
-        Développeur: CHAHIR OTHMAN
+        Développé par CHAHIR OTHMAN
     </div>
     """,
     unsafe_allow_html=True,
