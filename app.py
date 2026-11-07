@@ -10,8 +10,9 @@ from docx.shared import Inches, Pt
 
 
 def clear_and_prepare_headers(section):
-    """تفريغ الترويسات القديمة مع ضمان سلامة هيكل OpenXML لمنع الاختفاء في Word"""
+    """فك ارتباط الترويسات وتفريغ محتواها القديم بأمان"""
     section.header.is_linked_to_previous = False
+    section.first_page_header.is_linked_to_previous = False
 
     for h in [section.header, section.first_page_header]:
         for t in list(h.tables):
@@ -21,7 +22,7 @@ def clear_and_prepare_headers(section):
 
 
 def ensure_valid_header_xml(section):
-    """ضمان وجود فقرة واحدة على الأقل في الترويسات غير المستعملة لتفادي تلف XML"""
+    """ضمان وجود فقرة واحدة على الأقل في الترويسات غير المستعملة لمنع تلف XML"""
     for h in [section.header, section.first_page_header]:
         if len(h.paragraphs) == 0 and len(h.tables) == 0:
             h.add_paragraph()
@@ -187,25 +188,29 @@ header_space = st.slider(
     max_value=36,
     value=18,
     step=3,
-    help="اختر قيمة أصغر (مثل 6pt أو 12pt) لتوفير المساحة وتجنب ترحيل الأسطر للصفحة التالية عند الطباعة.",
+    help="اختر قيمة أصغر لتوفير المساحة عند الطباعة.",
 )
 
 
 def process_docx(
-    file_bytes,
+    uploaded_file_obj,
     show_all_pages=False,
     add_footer=False,
     is_arabic=True,
     uploaded_logo=None,
     header_space=18,
 ):
-    # إعادة ضبط مؤشر الملف المرفوع
-    file_bytes.seek(0)
-    doc = docx.Document(io.BytesIO(file_bytes.read()))
+    # قراءة بيانات الملف المرفوع بشكل صحيح
+    file_bytes = uploaded_file_obj.getvalue()
+    doc = docx.Document(io.BytesIO(file_bytes))
     logo_file = get_logo_bytes(uploaded_logo)
 
     for section in doc.sections:
-        # 1. تنظيف الترويسات السابقة
+        # ضبط الهامش العلوي ومسافة الترويسة لضمان عدم التداخل مع محتوى الملف
+        section.top_margin = Inches(1.25)
+        section.header_distance = Inches(0.4)
+
+        # 1. تفريغ الترويسات السابقة وفك الارتباط
         clear_and_prepare_headers(section)
 
         # 2. تحديد الترويسة المستهدفة (الصفحة الأولى فقط أم جميع الصفحات)
@@ -220,8 +225,9 @@ def process_docx(
         tbl = header.add_table(rows=1, cols=3, width=Inches(7.2))
         tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
 
+        # إدراج وسم w:bidiVisual في المكان الصحيح (في بداية tblPr) لمنع حظر الجدول من Word
         if is_arabic:
-            tbl._tbl.tblPr.append(OxmlElement("w:bidiVisual"))
+            tbl._tbl.tblPr.insert(0, OxmlElement("w:bidiVisual"))
 
         row = tbl.rows[0]
 
@@ -234,7 +240,7 @@ def process_docx(
             left_text = f"Direction Provinciale: Taounate\nLycée Qualifiant Oulad Daoud\nProfesseur: {teacher_name}"
             right_text = f"Matière: {subject}\nNiveau: {class_level}\nAnnée scolaire: {school_year}"
 
-        # العمود الأيمن
+        # العمود الأول
         cell_0 = row.cells[0]
         if is_arabic:
             set_cell_rtl(cell_0)
@@ -264,7 +270,7 @@ def process_docx(
             except Exception:
                 pass
 
-        # العمود الأيسر
+        # العمود الثالث
         cell_2 = row.cells[2]
         if is_arabic:
             set_cell_rtl(cell_2)
@@ -285,7 +291,7 @@ def process_docx(
         p_space.paragraph_format.space_before = Pt(0)
         p_space.paragraph_format.space_after = Pt(header_space)
 
-        # تصحيح هيكل XML لضمان عدم تلف الترويسات في Word
+        # تأمين هيكلية XML للترويسة
         ensure_valid_header_xml(section)
 
         # 4. معالجة التذييل (Pied de page)
@@ -305,7 +311,7 @@ def process_docx(
                 )
                 tbl_footer.alignment = WD_TABLE_ALIGNMENT.CENTER
                 if is_arabic:
-                    tbl_footer._tbl.tblPr.append(OxmlElement("w:bidiVisual"))
+                    tbl_footer._tbl.tblPr.insert(0, OxmlElement("w:bidiVisual"))
 
                 row_f = tbl_footer.rows[0]
 
@@ -355,7 +361,7 @@ def process_docx(
 
 if uploaded_file and st.button("توليد الملف المحدث", type="primary"):
     processed_file = process_docx(
-        file_bytes=uploaded_file,
+        uploaded_file_obj=uploaded_file,
         show_all_pages=show_all_pages,
         add_footer=add_footer,
         is_arabic=is_arabic,
