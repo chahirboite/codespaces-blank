@@ -9,18 +9,26 @@ from docx.oxml.ns import qn
 from docx.shared import Inches, Pt
 
 
-def clear_existing_headers(section):
-    """حذف أي ترويسات سابقة لتفادي التداخل"""
+def clear_and_prepare_headers(section):
+    """تفريغ الترويسات القديمة مع ضمان سلامة هيكل OpenXML لمنع الاختفاء في Word"""
     section.header.is_linked_to_previous = False
+
     for h in [section.header, section.first_page_header]:
-        for p in list(h.paragraphs):
-            p._p.getparent().remove(p._p)
         for t in list(h.tables):
             t._tbl.getparent().remove(t._tbl)
+        for p in list(h.paragraphs):
+            p._p.getparent().remove(p._p)
 
 
-def get_logo_file(uploaded_logo):
-    """تحديد مصدر الشعار: الملف المرفوع أو الصورة المحلية"""
+def ensure_valid_header_xml(section):
+    """ضمان وجود فقرة واحدة على الأقل في الترويسات غير المستعملة لتفادي تلف XML"""
+    for h in [section.header, section.first_page_header]:
+        if len(h.paragraphs) == 0 and len(h.tables) == 0:
+            h.add_paragraph()
+
+
+def get_logo_bytes(uploaded_logo):
+    """تحديد الشعار وإرجاعه كـ BytesIO أو مسار ملف محلي"""
     if uploaded_logo is not None:
         return io.BytesIO(uploaded_logo.getvalue())
 
@@ -173,7 +181,6 @@ with col_opt2:
         help="تفعيل إظهار تذييل الصفحات لجميع صفحات الملف.",
     )
 
-# 5. التحكم في المسافة الفاصلة لترشيد استهلاك الورق
 header_space = st.slider(
     "المسافة الفاصلة أسفل الترويسة (نقطة) / Espace sous l'en-tête (pt):",
     min_value=6,
@@ -192,13 +199,16 @@ def process_docx(
     uploaded_logo=None,
     header_space=18,
 ):
-    doc = docx.Document(file_bytes)
-    logo_file = get_logo_file(uploaded_logo)
+    # إعادة ضبط مؤشر الملف المرفوع
+    file_bytes.seek(0)
+    doc = docx.Document(io.BytesIO(file_bytes.read()))
+    logo_file = get_logo_bytes(uploaded_logo)
 
     for section in doc.sections:
-        # --- 1. معالجة الترويسة (En-tête) ---
-        clear_existing_headers(section)
+        # 1. تنظيف الترويسات السابقة
+        clear_and_prepare_headers(section)
 
+        # 2. تحديد الترويسة المستهدفة (الصفحة الأولى فقط أم جميع الصفحات)
         if not show_all_pages:
             section.different_first_page_header_footer = True
             header = section.first_page_header
@@ -206,6 +216,7 @@ def process_docx(
             section.different_first_page_header_footer = False
             header = section.header
 
+        # 3. بناء جدول الترويسة
         tbl = header.add_table(rows=1, cols=3, width=Inches(7.2))
         tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
 
@@ -223,7 +234,7 @@ def process_docx(
             left_text = f"Direction Provinciale: Taounate\nLycée Qualifiant Oulad Daoud\nProfesseur: {teacher_name}"
             right_text = f"Matière: {subject}\nNiveau: {class_level}\nAnnée scolaire: {school_year}"
 
-        # العمود الأول
+        # العمود الأيمن
         cell_0 = row.cells[0]
         if is_arabic:
             set_cell_rtl(cell_0)
@@ -239,7 +250,7 @@ def process_docx(
             bold=True,
         )
 
-        # العمود الأوسط (صورة الشعار)
+        # العمود الأوسط (إدراج الشعار)
         cell_1 = row.cells[1]
         if is_arabic:
             set_cell_rtl(cell_1)
@@ -253,7 +264,7 @@ def process_docx(
             except Exception:
                 pass
 
-        # العمود الثالث
+        # العمود الأيسر
         cell_2 = row.cells[2]
         if is_arabic:
             set_cell_rtl(cell_2)
@@ -269,12 +280,15 @@ def process_docx(
             bold=True,
         )
 
-        # مسافة فاصلة قابلة للتعديل أسفل الترويسة
+        # مسافة فاصلة أسفل الجدول
         p_space = header.add_paragraph()
         p_space.paragraph_format.space_before = Pt(0)
         p_space.paragraph_format.space_after = Pt(header_space)
 
-        # --- 2. معالجة تذييل الصفحات (Pied de page) ---
+        # تصحيح هيكل XML لضمان عدم تلف الترويسات في Word
+        ensure_valid_header_xml(section)
+
+        # 4. معالجة التذييل (Pied de page)
         if add_footer:
             footers_to_process = [section.footer]
             if section.different_first_page_header_footer:
@@ -295,7 +309,7 @@ def process_docx(
 
                 row_f = tbl_footer.rows[0]
 
-                # الجهة 1: اسم الأستاذ
+                # الجهة الأولى
                 cell_f_0 = row_f.cells[0]
                 if is_arabic:
                     set_cell_rtl(cell_f_0)
@@ -314,7 +328,7 @@ def process_docx(
                     p_f_0, f_text_0, is_arabic, font_size=10, bold=False
                 )
 
-                # الجهة 2: الموسم الدراسي
+                # الجهة الثانية
                 cell_f_1 = row_f.cells[1]
                 if is_arabic:
                     set_cell_rtl(cell_f_1)
