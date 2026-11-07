@@ -1,3 +1,4 @@
+import base64
 import io
 import os
 import docx
@@ -7,6 +8,34 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Inches, Pt
+
+
+def get_logo_bytes(uploaded_logo):
+    """تحديد الشعار وإرجاعه كـ BytesIO أو مسار ملف محلي"""
+    if uploaded_logo is not None:
+        return io.BytesIO(uploaded_logo.getvalue())
+
+    for filename in ["logo.jpg", "logo.png", "logo.jpeg", "LOGO.JPG", "LOGO.PNG"]:
+        if os.path.exists(filename):
+            return filename
+    return None
+
+
+def get_base64_logo(uploaded_logo):
+    """تحويل صورة الشعار إلى Base64 لاستخدامها كخلفية للموقع"""
+    logo = get_logo_bytes(uploaded_logo)
+    if logo:
+        try:
+            if isinstance(logo, io.BytesIO):
+                logo.seek(0)
+                encoded = base64.b64encode(logo.read()).decode()
+            else:
+                with open(logo, "rb") as f:
+                    encoded = base64.b64encode(f.read()).decode()
+            return encoded
+        except Exception:
+            return None
+    return None
 
 
 def clear_and_prepare_headers(section):
@@ -26,17 +55,6 @@ def ensure_valid_header_xml(section):
     for h in [section.header, section.first_page_header]:
         if len(h.paragraphs) == 0 and len(h.tables) == 0:
             h.add_paragraph()
-
-
-def get_logo_bytes(uploaded_logo):
-    """تحديد الشعار وإرجاعه كـ BytesIO أو مسار ملف محلي"""
-    if uploaded_logo is not None:
-        return io.BytesIO(uploaded_logo.getvalue())
-
-    for filename in ["logo.jpg", "logo.png", "logo.jpeg", "LOGO.JPG", "LOGO.PNG"]:
-        if os.path.exists(filename):
-            return filename
-    return None
 
 
 def set_cell_rtl(cell):
@@ -107,14 +125,88 @@ LEVELS_FR = [
     "Autre niveau...",
 ]
 
-
 # --- إعدادات صفحة Streamlit ---
 st.set_page_config(
     page_title="الترويسة المدرسية الذكية 📝", page_icon="📝", layout="centered"
 )
 
-st.title("📝 الترويسة المدرسية الذكية")
-st.write("دمج وتحديث ترويسة وتذييل الملفات التعليمية تلقائياً وبشكل أنيق.")
+# رفع الملفات أولاً لمعرفة ما إذا كان هناك شعار للخلفية
+col_file1, col_file2 = st.columns(2)
+with col_file1:
+    uploaded_file = st.file_uploader(
+        "📂 اختر ملف Word (.docx):", type=["docx"]
+    )
+with col_file2:
+    uploaded_logo = st.file_uploader(
+        "🖼️ رفع شعار المؤسسة (اختياري):",
+        type=["jpg", "png", "jpeg"],
+        help="سيظهر الشعار في الترويسة وكخلفية هادئة للموقع.",
+    )
+
+# تطبيق الخلفية الشفافة CSS (10% Opacity)
+base64_logo = get_base64_logo(uploaded_logo)
+bg_css = ""
+if base64_logo:
+    bg_css = f"""
+    .stApp::before {{
+        content: "";
+        position: fixed;
+        top: 0; left: 0; width: 100%; height: 100%;
+        background-image: url('data:image/png;base64,{base64_logo}');
+        background-repeat: no-repeat;
+        background-position: center;
+        background-size: 380px;
+        opacity: 0.07;
+        z-index: -1;
+        pointer-events: none;
+    }}
+    """
+
+# تحسين ديزاين الواجهة بالكامل عبر CSS
+st.markdown(
+    f"""
+    <style>
+    {bg_css}
+    .stApp {{
+        background-color: #f8fafc;
+    }}
+    h1 {{
+        color: #1e293b;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        text-align: center;
+        margin-bottom: 5px;
+    }}
+    .subtitle {{
+        text-align: center;
+        color: #64748b;
+        font-size: 15px;
+        margin-bottom: 25px;
+    }}
+    .stButton>button {{
+        width: 100%;
+        border-radius: 8px;
+        font-weight: bold;
+        height: 48px;
+        background-color: #2563eb;
+        color: white;
+        border: none;
+        box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);
+        transition: all 0.2s ease-in-out;
+    }}
+    .stButton>button:hover {{
+        background-color: #1d4ed8;
+        box-shadow: 0 6px 12px -2px rgba(37, 99, 235, 0.3);
+    }}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+st.markdown("<h1>📝 الترويسة المدرسية الذكية</h1>", unsafe_allow_html=True)
+st.markdown(
+    "<div class='subtitle'>دمج وتحديث ترويسة وتذييل الملفات التعليمية تلقائياً وبشكل أنيق</div>",
+    unsafe_allow_html=True,
+)
 
 # اختيار لغة الترويسة
 lang = st.radio(
@@ -123,18 +215,6 @@ lang = st.radio(
     horizontal=True,
 )
 is_arabic = lang == "العربية"
-
-col_file1, col_file2 = st.columns(2)
-with col_file1:
-    uploaded_file = st.file_uploader(
-        "اختر ملف Word (.docx):", type=["docx"]
-    )
-with col_file2:
-    uploaded_logo = st.file_uploader(
-        "رفع شعار المؤسسة (اختياري) / Logo:",
-        type=["jpg", "png", "jpeg"],
-        help="في حال عدم رفع شعار، سيتم اعتماد logo.jpg تلقائياً إن وجد.",
-    )
 
 default_teacher = "ذ. عثمان شهير" if is_arabic else "Pr. Othmane Chahir"
 default_subject = "الرياضيات" if is_arabic else "Mathématiques"
@@ -182,14 +262,22 @@ with col_opt2:
         help="تفعيل إظهار تذييل الصفحات لجميع صفحات الملف.",
     )
 
-header_space = st.slider(
-    "المسافة الفاصلة أسفل الترويسة (نقطة) / Espace sous l'en-tête (pt):",
-    min_value=6,
-    max_value=36,
-    value=18,
-    step=3,
-    help="اختر قيمة أصغر لتوفير المساحة عند الطباعة.",
-)
+col_sp1, col_sp2 = st.columns(2)
+with col_sp1:
+    header_space = st.slider(
+        "المسافة أسفل الترويسة (نقطة):",
+        min_value=6,
+        max_value=36,
+        value=18,
+        step=3,
+        help="اختر قيمة أصغر لتوفير المساحة عند الطباعة.",
+    )
+with col_sp2:
+    border_color = st.color_picker(
+        "لون الخط الفاصل أسفل الترويسة:",
+        value="#444444",
+        help="اختر لون الخط الفاصل بين الترويسة ومحتوى المستند.",
+    )
 
 
 def process_docx(
@@ -199,10 +287,14 @@ def process_docx(
     is_arabic=True,
     uploaded_logo=None,
     header_space=18,
+    border_color_hex="#444444",
 ):
     file_bytes = uploaded_file_obj.getvalue()
     doc = docx.Document(io.BytesIO(file_bytes))
     logo_file = get_logo_bytes(uploaded_logo)
+
+    # تحويل كود اللون HEX لاستخدامه في Word XML
+    clean_hex = border_color_hex.lstrip("#")
 
     for section in doc.sections:
         section.top_margin = Inches(1.2)
@@ -225,13 +317,13 @@ def process_docx(
         if is_arabic:
             tblPr.insert(0, OxmlElement("w:bidiVisual"))
 
-        # إضافة خط سفلي أنيق وفاصل للجدول
+        # إضافة خط سفلي مخصص باللون المختار
         tblBorders = OxmlElement("w:tblBorders")
         bottom_border = OxmlElement("w:bottom")
         bottom_border.set(qn("w:val"), "single")
         bottom_border.set(qn("w:sz"), "8")  # سمك الخط 1pt
         bottom_border.set(qn("w:space"), "0")
-        bottom_border.set(qn("w:color"), "444444")
+        bottom_border.set(qn("w:color"), clean_hex)
         tblBorders.append(bottom_border)
         tblPr.append(tblBorders)
 
@@ -329,7 +421,6 @@ def process_docx(
                 row_f.cells[1].width = Inches(3.6)
 
                 if is_arabic:
-                    # الخلية اليمنى: اسم الأستاذ فقط
                     cell_f_r = row_f.cells[0]
                     set_cell_rtl(cell_f_r)
                     p_f_r = cell_f_r.paragraphs[0]
@@ -338,7 +429,6 @@ def process_docx(
                         p_f_r, teacher_name, is_arabic, font_size=10, bold=False
                     )
 
-                    # الخلية اليسرى: الموسم الدراسي فقط
                     cell_f_l = row_f.cells[1]
                     set_cell_rtl(cell_f_l)
                     p_f_l = cell_f_l.paragraphs[0]
@@ -347,7 +437,6 @@ def process_docx(
                         p_f_l, school_year, is_arabic, font_size=10, bold=False
                     )
                 else:
-                    # الخلية اليسرى: الموسم الدراسي فقط
                     cell_f_l = row_f.cells[0]
                     p_f_l = cell_f_l.paragraphs[0]
                     p_f_l.alignment = WD_ALIGN_PARAGRAPH.LEFT
@@ -355,7 +444,6 @@ def process_docx(
                         p_f_l, school_year, is_arabic, font_size=10, bold=False
                     )
 
-                    # الخلية اليمنى: اسم الأستاذ فقط
                     cell_f_r = row_f.cells[1]
                     p_f_r = cell_f_r.paragraphs[0]
                     p_f_r.alignment = WD_ALIGN_PARAGRAPH.RIGHT
@@ -369,7 +457,7 @@ def process_docx(
     return output
 
 
-if uploaded_file and st.button("توليد الملف المحدث", type="primary"):
+if uploaded_file and st.button("🚀 توليد الملف المحدث"):
     processed_file = process_docx(
         uploaded_file_obj=uploaded_file,
         show_all_pages=show_all_pages,
@@ -377,6 +465,7 @@ if uploaded_file and st.button("توليد الملف المحدث", type="prima
         is_arabic=is_arabic,
         uploaded_logo=uploaded_logo,
         header_space=header_space,
+        border_color_hex=border_color,
     )
     st.success("تم تحديث الملف بنجاح!")
     st.download_button(
