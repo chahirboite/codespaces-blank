@@ -10,33 +10,31 @@ from docx.oxml.ns import qn
 from docx.shared import Inches, Pt
 
 
+def get_static_logo_data_uri():
+    """قراءة صورة الشعار المحلي الثابت فقط لاستخدامها كخلفية دائمية خلف العنوان"""
+    for filename in ["logo.jpg", "logo.png", "logo.jpeg", "LOGO.JPG", "LOGO.PNG"]:
+        if os.path.exists(filename):
+            try:
+                ext = filename.split(".")[-1].lower()
+                mime_type = (
+                    "image/jpeg" if ext in ["jpg", "jpeg"] else "image/png"
+                )
+                with open(filename, "rb") as f:
+                    encoded = base64.b64encode(f.read()).decode()
+                return f"data:{mime_type};base64,{encoded}"
+            except Exception:
+                pass
+    return None
+
+
 def get_logo_bytes(uploaded_logo):
-    """تحديد الشعار وإرجاعه كـ BytesIO أو مسار ملف محلي"""
+    """تحديد الشعار الخاص بملف Word (الملف المرفوع أو الصورة المحلية)"""
     if uploaded_logo is not None:
         return io.BytesIO(uploaded_logo.getvalue())
 
     for filename in ["logo.jpg", "logo.png", "logo.jpeg", "LOGO.JPG", "LOGO.PNG"]:
         if os.path.exists(filename):
             return filename
-    return None
-
-
-def get_base64_logo(uploaded_logo):
-    """تحويل صورة الشعار إلى Base64 لاستخدامها كخلفية شفافة خلف العنوان"""
-    logo = get_logo_bytes(uploaded_logo)
-    if logo:
-        try:
-            if isinstance(logo, io.BytesIO):
-                logo.seek(0)
-                encoded = base64.b64encode(logo.read()).decode()
-            elif isinstance(logo, str) and os.path.exists(logo):
-                with open(logo, "rb") as f:
-                    encoded = base64.b64encode(f.read()).decode()
-            else:
-                return None
-            return encoded
-        except Exception:
-            return None
     return None
 
 
@@ -156,24 +154,11 @@ st.set_page_config(
 # 1. حاوية عنوان الصفحة
 header_container = st.container()
 
-# 2. أزرار وحقول رفع الملفات
-col_file1, col_file2 = st.columns(2)
-with col_file1:
-    uploaded_file = st.file_uploader(
-        "📂 اختر ملف Word (.docx):", type=["docx"]
-    )
-with col_file2:
-    uploaded_logo = st.file_uploader(
-        "🖼️ رفع شعار المؤسسة (اختياري):",
-        type=["jpg", "png", "jpeg"],
-        help="سيظهر الشعار في الترويسة وكخلفية هادئة خلف عنوان الصفحة.",
-    )
-
-# 3. خلفية الشعار الشفافة خلف العنوان وتعديل لون الوصف ليكون داكناً
-base64_logo = get_base64_logo(uploaded_logo)
+# 2. بناء خلفية العنوان الثابتة (تعتمد حصرياً على الشعار المحلي الثابت)
+static_logo_uri = get_static_logo_data_uri()
 bg_style = ""
-if base64_logo:
-    bg_style = f"background-image: linear-gradient(rgba(248, 250, 252, 0.90), rgba(248, 250, 252, 0.90)), url('data:image/png;base64,{base64_logo}'); background-size: contain; background-repeat: no-repeat; background-position: center;"
+if static_logo_uri:
+    bg_style = f"background-image: linear-gradient(rgba(248, 250, 252, 0.90), rgba(248, 250, 252, 0.90)), url('{static_logo_uri}'); background-size: contain; background-repeat: no-repeat; background-position: center;"
 
 with header_container:
     st.markdown(
@@ -198,6 +183,19 @@ with header_container:
         </div>
         """,
         unsafe_allow_html=True,
+    )
+
+# 3. أزرار وحقول رفع الملفات
+col_file1, col_file2 = st.columns(2)
+with col_file1:
+    uploaded_file = st.file_uploader(
+        "📂 اختر ملف Word (.docx):", type=["docx"]
+    )
+with col_file2:
+    uploaded_logo = st.file_uploader(
+        "🖼️ رفع شعار المؤسسة (اختياري):",
+        type=["jpg", "png", "jpeg"],
+        help="سيتم دمج الشعار المرفوع في ترويسة ملف Word المنتَج.",
     )
 
 st.markdown(
@@ -228,7 +226,7 @@ lang = st.radio(
 )
 is_arabic = lang == "العربية"
 
-# حقول الإدخال مع نصوص إرشادية فقط (Placeholders) دون تعبئة تلقائية
+# حقول الإدخال مع نصوص إرشادية (Placeholders)
 col1, col2 = st.columns(2)
 with col1:
     teacher_name = st.text_input(
@@ -316,7 +314,7 @@ def process_docx(
     doc = docx.Document(io.BytesIO(file_bytes))
     logo_file = get_logo_bytes(uploaded_logo)
 
-    # قيم افتراضية في حال ترك الأستاذ الحقول فارغة عند التوليد
+    # قيم افتراضية احتياطية في حال ترك الأستاذ الحقول فارغة عند التوليد
     t_name = (
         teacher_name_val.strip()
         if teacher_name_val.strip()
