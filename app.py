@@ -47,7 +47,7 @@ def set_cell_rtl(cell):
 
 
 def add_styled_run(
-    paragraph, text, is_arabic=True, font_size=11, bold=False
+    paragraph, text, is_arabic=True, font_size=10.5, bold=False
 ):
     """إضافة نص مع مراعاة اتجاه اللغة (RTL للعربية و LTR للفرنسية)"""
     if is_arabic:
@@ -205,7 +205,7 @@ def process_docx(
     logo_file = get_logo_bytes(uploaded_logo)
 
     for section in doc.sections:
-        section.top_margin = Inches(1.25)
+        section.top_margin = Inches(1.2)
         section.header_distance = Inches(0.4)
 
         clear_and_prepare_headers(section)
@@ -231,7 +231,7 @@ def process_docx(
         bottom_border.set(qn("w:val"), "single")
         bottom_border.set(qn("w:sz"), "8")  # سمك الخط 1pt
         bottom_border.set(qn("w:space"), "0")
-        bottom_border.set(qn("w:color"), "555555")  # لون رمادي أنيق
+        bottom_border.set(qn("w:color"), "444444")
         tblBorders.append(bottom_border)
         tblPr.append(tblBorders)
 
@@ -252,21 +252,19 @@ def process_docx(
             left_text = f"Direction Provinciale: Taounate\nLycée Qualifiant Oulad Daoud\nProfesseur: {teacher_name}"
             right_text = f"Matière: {subject}\nNiveau: {class_level}\nAnnée scolaire: {school_year}"
 
-        # العمود الأول (ضبط الكشيدة والتطويل للعربية)
+        # العمود الأول
         cell_0 = row.cells[0]
         if is_arabic:
             set_cell_rtl(cell_0)
         p_0 = cell_0.paragraphs[0]
         p_0.alignment = (
-            WD_ALIGN_PARAGRAPH.JUSTIFY
-            if is_arabic
-            else WD_ALIGN_PARAGRAPH.LEFT
+            WD_ALIGN_PARAGRAPH.RIGHT if is_arabic else WD_ALIGN_PARAGRAPH.LEFT
         )
         add_styled_run(
             p_0,
             right_text if is_arabic else left_text,
             is_arabic,
-            font_size=11,
+            font_size=10.5,
             bold=True,
         )
 
@@ -284,21 +282,19 @@ def process_docx(
             except Exception:
                 pass
 
-        # العمود الثالث (ضبط الكشيدة والتطويل للعربية)
+        # العمود الثالث
         cell_2 = row.cells[2]
         if is_arabic:
             set_cell_rtl(cell_2)
         p_2 = cell_2.paragraphs[0]
         p_2.alignment = (
-            WD_ALIGN_PARAGRAPH.JUSTIFY
-            if is_arabic
-            else WD_ALIGN_PARAGRAPH.RIGHT
+            WD_ALIGN_PARAGRAPH.LEFT if is_arabic else WD_ALIGN_PARAGRAPH.RIGHT
         )
         add_styled_run(
             p_2,
             left_text if is_arabic else right_text,
             is_arabic,
-            font_size=11,
+            font_size=10.5,
             bold=True,
         )
 
@@ -309,7 +305,7 @@ def process_docx(
 
         ensure_valid_header_xml(section)
 
-        # معالجة التذييل (Pied de page)
+        # --- معالجة تذييل الصفحات (Pied de page) ---
         if add_footer:
             footers_to_process = [section.footer]
             if section.different_first_page_header_footer:
@@ -329,44 +325,43 @@ def process_docx(
                     tbl_footer._tbl.tblPr.insert(0, OxmlElement("w:bidiVisual"))
 
                 row_f = tbl_footer.rows[0]
+                row_f.cells[0].width = Inches(3.6)
+                row_f.cells[1].width = Inches(3.6)
 
-                # الجهة الأولى
-                cell_f_0 = row_f.cells[0]
                 if is_arabic:
-                    set_cell_rtl(cell_f_0)
-                p_f_0 = cell_f_0.paragraphs[0]
-                p_f_0.alignment = (
-                    WD_ALIGN_PARAGRAPH.RIGHT
-                    if is_arabic
-                    else WD_ALIGN_PARAGRAPH.LEFT
-                )
-                f_text_0 = (
-                    f"الأستاذ: {teacher_name}"
-                    if is_arabic
-                    else f"Professeur: {teacher_name}"
-                )
-                add_styled_run(
-                    p_f_0, f_text_0, is_arabic, font_size=10, bold=False
-                )
+                    # الخلية اليمنى: اسم الأستاذ فقط
+                    cell_f_r = row_f.cells[0]
+                    set_cell_rtl(cell_f_r)
+                    p_f_r = cell_f_r.paragraphs[0]
+                    p_f_r.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+                    add_styled_run(
+                        p_f_r, teacher_name, is_arabic, font_size=10, bold=False
+                    )
 
-                # الجهة الثانية
-                cell_f_1 = row_f.cells[1]
-                if is_arabic:
-                    set_cell_rtl(cell_f_1)
-                p_f_1 = cell_f_1.paragraphs[0]
-                p_f_1.alignment = (
-                    WD_ALIGN_PARAGRAPH.LEFT
-                    if is_arabic
-                    else WD_ALIGN_PARAGRAPH.RIGHT
-                )
-                f_text_1 = (
-                    f"الموسم الدراسي: {school_year}"
-                    if is_arabic
-                    else f"Année scolaire: {school_year}"
-                )
-                add_styled_run(
-                    p_f_1, f_text_1, is_arabic, font_size=10, bold=False
-                )
+                    # الخلية اليسرى: الموسم الدراسي فقط
+                    cell_f_l = row_f.cells[1]
+                    set_cell_rtl(cell_f_l)
+                    p_f_l = cell_f_l.paragraphs[0]
+                    p_f_l.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                    add_styled_run(
+                        p_f_l, school_year, is_arabic, font_size=10, bold=False
+                    )
+                else:
+                    # الخلية اليسرى: الموسم الدراسي فقط
+                    cell_f_l = row_f.cells[0]
+                    p_f_l = cell_f_l.paragraphs[0]
+                    p_f_l.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                    add_styled_run(
+                        p_f_l, school_year, is_arabic, font_size=10, bold=False
+                    )
+
+                    # الخلية اليمنى: اسم الأستاذ فقط
+                    cell_f_r = row_f.cells[1]
+                    p_f_r = cell_f_r.paragraphs[0]
+                    p_f_r.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+                    add_styled_run(
+                        p_f_r, teacher_name, is_arabic, font_size=10, bold=False
+                    )
 
     output = io.BytesIO()
     doc.save(output)
