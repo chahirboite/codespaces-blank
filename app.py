@@ -196,7 +196,7 @@ with header_container:
         unsafe_allow_html=True,
     )
 
-# 3. أزرار وحقول رفع الملفات
+# 3. أزرار وحقول رفع الملفات (تأتي أولاً)
 col_file1, col_file2 = st.columns(2)
 with col_file1:
     uploaded_file = st.file_uploader(
@@ -240,7 +240,24 @@ is_arabic = lang == "العربية"
 # حساب الموسم الدراسي تلقائياً خلف الكواليس
 auto_school_year = get_auto_school_year()
 
-# حقول الإدخال الأساسية
+# 4. خانات المديرية والمؤسسة (مرتبة مباشرة بعد أزرار الرفع واللغة)
+col_sch1, col_sch2 = st.columns(2)
+with col_sch1:
+    direction_name = st.text_input(
+        "المديرية الإقليمية / Direction Provinciale:",
+        value="",
+        placeholder="تاونات" if is_arabic else "Taounate",
+    )
+with col_sch2:
+    school_name = st.text_input(
+        "المؤسسة التعليمية / Établissement:",
+        value="",
+        placeholder="ثانوية أولاد داود التأهيلية"
+        if is_arabic
+        else "Lycée Qualifiant Oulad Daoud",
+    )
+
+# 5. باقي خانات الإدخال الشخصية والدراسية
 col1, col2 = st.columns(2)
 with col1:
     teacher_name = st.text_input(
@@ -307,6 +324,8 @@ with col_sp2:
 
 def process_docx(
     uploaded_file_obj,
+    direction_val,
+    school_val,
     teacher_name_val,
     subject_val,
     class_level_val,
@@ -322,7 +341,17 @@ def process_docx(
     doc = docx.Document(io.BytesIO(file_bytes))
     logo_file = get_logo_bytes(uploaded_logo)
 
-    # قيم افتراضية احتياطية في حال ترك الأستاذ الحقول فارغة عند التوليد
+    # التوليد التلقائي: في حالة تركها فارغة تُعتمد مديرية تاونات وثانوية أولاد داود التأهيلية
+    d_name = (
+        direction_val.strip()
+        if direction_val.strip()
+        else ("تاونات" if is_arabic else "Taounate")
+    )
+    s_name = (
+        school_val.strip()
+        if school_val.strip()
+        else ("ثانوية أولاد داود التأهيلية" if is_arabic else "Lycée Qualifiant Oulad Daoud")
+    )
     t_name = (
         teacher_name_val.strip()
         if teacher_name_val.strip()
@@ -380,9 +409,9 @@ def process_docx(
             right_text = (
                 f"مادة {subj}\n{c_level}\nالموسم الدراسي: {s_year}"
             )
-            left_text = f"المديرية الإقليمية تاونات\nثانوية أولاد داود التأهيلية\nالأستاذ: {t_name}"
+            left_text = f"المديرية الإقليمية: {d_name}\n{s_name}\nالأستاذ: {t_name}"
         else:
-            left_text = f"Direction Provinciale: Taounate\nLycée Qualifiant Oulad Daoud\nProfesseur: {t_name}"
+            left_text = f"Direction Provinciale: {d_name}\n{s_name}\nProfesseur: {t_name}"
             right_text = f"Matière: {subj}\nNiveau: {c_level}\nAnnée scolaire: {s_year}"
 
         # العمود الأول
@@ -503,6 +532,8 @@ def process_docx(
 if uploaded_file and st.button("🚀 توليد الملف المحدث"):
     processed_file = process_docx(
         uploaded_file_obj=uploaded_file,
+        direction_val=direction_name,
+        school_val=school_name,
         teacher_name_val=teacher_name,
         subject_val=subject,
         class_level_val=class_level,
