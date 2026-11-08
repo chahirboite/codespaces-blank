@@ -412,8 +412,11 @@ def process_docx(
     clean_hex = border_color_hex.lstrip("#")
 
     for section in doc.sections:
-        section.top_margin = Inches(1.2)
+        # إبعاد محتوى الصفحة عن التذييل وضبط مسافة التذييل أسفل الصفحة
+        section.top_margin = Inches(1.0)
+        section.bottom_margin = Inches(1.2)
         section.header_distance = Inches(0.4)
+        section.footer_distance = Inches(0.4)
 
         clear_and_prepare_headers(section)
 
@@ -505,11 +508,20 @@ def process_docx(
 
         ensure_valid_header_xml(section)
 
-        # --- معالجة التذييل بتقريب العناصر ومنع الانكسار ---
+        # --- معالجة التذييل المتماثل ديناميكياً مع مركز الصفحة ---
         if add_footer:
             footers_to_process = [section.footer]
             if section.different_first_page_header_footer:
                 footers_to_process.append(section.first_page_footer)
+
+            # حساب عرض الطباعة ومركز الصفحة الهندسي بدقة
+            page_w = section.page_width if section.page_width else Inches(8.27)
+            margin_l = section.left_margin if section.left_margin else Inches(0.75)
+            margin_r = section.right_margin if section.right_margin else Inches(0.75)
+            printable_w = page_w - margin_l - margin_r
+
+            center_pos = printable_w / 2
+            right_pos = printable_w
 
             for footer_target in footers_to_process:
                 for p in list(footer_target.paragraphs):
@@ -520,39 +532,47 @@ def process_docx(
                 p_foot = footer_target.add_paragraph()
                 p_foot.paragraph_format.space_before = Pt(0)
                 p_foot.paragraph_format.space_after = Pt(0)
+                p_foot.paragraph_format.left_indent = Inches(0)
+                p_foot.paragraph_format.right_indent = Inches(0)
 
-                # إزاحة النصوص نحو الداخل بمقدار 0.8 بوصة لتقريب العناصر وتفادي الحواف
-                p_foot.paragraph_format.left_indent = Inches(0.8)
-                p_foot.paragraph_format.right_indent = Inches(0.8)
-
-                # موقع التبويب المناسب داخل الهوامش المعدلة
-                tab_position = Inches(5.0)
+                # إضافة نقطة تبويب ممتدة للمركز بالتموضع المتماثل صراحة
+                p_foot.paragraph_format.tab_stops.add_tab_stop(
+                    center_pos, WD_TAB_ALIGNMENT.CENTER
+                )
 
                 if is_arabic:
-                    p_foot.alignment = WD_ALIGN_PARAGRAPH.RIGHT
                     p_foot.paragraph_format.tab_stops.add_tab_stop(
-                        tab_position, WD_TAB_ALIGNMENT.LEFT
+                        right_pos, WD_TAB_ALIGNMENT.LEFT
                     )
+                    p_foot.alignment = WD_ALIGN_PARAGRAPH.RIGHT
 
-                    # اسم الأستاذ (عربي)
+                    # 1. العنصر الأيمن: اسم الأستاذ
                     add_styled_run(
                         p_foot, t_name, is_arabic=True, font_size=10, bold=False
                     )
+                    # 2. التبويب الأول (الانتقال لمركز الصفحة - محجوز لرقم الصفحة)
                     p_foot.add_run("\t")
-                    # الموسم الدراسي (أرقام LTR لمنع انكسار -2026 / 2027)
+                    # 3. التبويب الثاني (الانتقال لأقصى اليسار المتماثل)
+                    p_foot.add_run("\t")
+                    # 4. العنصر الأيسر: الموسم الدراسي
                     add_styled_run(
                         p_foot, s_year, is_arabic=False, font_size=10, bold=False
                     )
                 else:
-                    p_foot.alignment = WD_ALIGN_PARAGRAPH.LEFT
                     p_foot.paragraph_format.tab_stops.add_tab_stop(
-                        tab_position, WD_TAB_ALIGNMENT.RIGHT
+                        right_pos, WD_TAB_ALIGNMENT.RIGHT
                     )
+                    p_foot.alignment = WD_ALIGN_PARAGRAPH.LEFT
 
+                    # 1. العنصر الأيسر: الموسم الدراسي
                     add_styled_run(
                         p_foot, s_year, is_arabic=False, font_size=10, bold=False
                     )
+                    # 2. التبويب الأول (الانتقال لمركز الصفحة - محجوز لرقم الصفحة)
                     p_foot.add_run("\t")
+                    # 3. التبويب الثاني (الانتقال لأقصى اليمين المتماثل)
+                    p_foot.add_run("\t")
+                    # 4. العنصر الأيمن: اسم الأستاذ
                     add_styled_run(
                         p_foot, t_name, is_arabic=False, font_size=10, bold=False
                     )
