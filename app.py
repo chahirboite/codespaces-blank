@@ -139,7 +139,6 @@ def add_header_line_to_cell(cell, text, is_arabic, align, is_first=False):
     p.paragraph_format.space_after = Pt(2)
     p.paragraph_format.line_spacing = 1.0
 
-    # خوارزمية دقيقة لتعديل حجم الخط تلقائياً بناءً على طول النص
     length = len(text)
     if length > 38:
         font_size = 7.5
@@ -190,6 +189,16 @@ LEVELS_FR = [
 st.set_page_config(
     page_title="Générateur d'En-tête Scolaire 📝", page_icon="📝", layout="centered"
 )
+
+# التهيئة الأولية لذاكرة الجلسة (Session State) للحفاظ على زر التحميل ثابتاً
+if "processed_data" not in st.session_state:
+    st.session_state.processed_data = None
+if "processed_filename" not in st.session_state:
+    st.session_state.processed_filename = ""
+if "processed_mime" not in st.session_state:
+    st.session_state.processed_mime = ""
+if "success_msg" not in st.session_state:
+    st.session_state.success_msg = ""
 
 # 1. اختيار لغة الواجهة والترويسة
 lang = st.radio(
@@ -455,7 +464,6 @@ def process_docx(
             section.different_first_page_header_footer = False
             header = section.header
 
-        # بناء الجدول وتوزيع العرض (3.1 بوصة لكل خلية جانبية)
         tbl = header.add_table(rows=1, cols=3, width=Inches(7.2))
         tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
         tblPr = tbl._tbl.tblPr
@@ -477,37 +485,31 @@ def process_docx(
         for i, cell in enumerate(row.cells):
             cell.width = col_widths[i]
             cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
-            set_cell_no_wrap(cell)  # منع انكسار الأسطر على مستوى XML
+            set_cell_no_wrap(cell)
 
-        # بناء سطور الترويسة الستة بدون سابقة Niveau: وبمنع كلي للرجوع للسطر
         if is_arabic:
-            # الجانب الأيمن (عربي)
             cell_right = row.cells[0]
             set_cell_rtl(cell_right)
             add_header_line_to_cell(cell_right, f"مادة {subj}", is_arabic=True, align=WD_ALIGN_PARAGRAPH.RIGHT, is_first=True)
             add_header_line_to_cell(cell_right, c_level, is_arabic=True, align=WD_ALIGN_PARAGRAPH.RIGHT, is_first=False)
             add_header_line_to_cell(cell_right, f"الموسم الدراسي: {s_year}", is_arabic=True, align=WD_ALIGN_PARAGRAPH.RIGHT, is_first=False)
 
-            # الجانب الأيسر (عربي)
             cell_left = row.cells[2]
             set_cell_rtl(cell_left)
             add_header_line_to_cell(cell_left, f"المديرية الإقليمية: {d_name}", is_arabic=True, align=WD_ALIGN_PARAGRAPH.LEFT, is_first=True)
             add_header_line_to_cell(cell_left, s_name, is_arabic=True, align=WD_ALIGN_PARAGRAPH.LEFT, is_first=False)
             add_header_line_to_cell(cell_left, f"الأستاذ: {t_name}", is_arabic=True, align=WD_ALIGN_PARAGRAPH.LEFT, is_first=False)
         else:
-            # الجانب الأيسر (فرنسي)
             cell_left = row.cells[0]
             add_header_line_to_cell(cell_left, f"Direction Provinciale: {d_name}", is_arabic=False, align=WD_ALIGN_PARAGRAPH.LEFT, is_first=True)
             add_header_line_to_cell(cell_left, s_name, is_arabic=False, align=WD_ALIGN_PARAGRAPH.LEFT, is_first=False)
             add_header_line_to_cell(cell_left, f"Professeur: {t_name}", is_arabic=False, align=WD_ALIGN_PARAGRAPH.LEFT, is_first=False)
 
-            # الجانب الأيمن (فرنسي - تم حذف كلمة Niveau: المباشرة)
             cell_right = row.cells[2]
             add_header_line_to_cell(cell_right, f"Matière: {subj}", is_arabic=False, align=WD_ALIGN_PARAGRAPH.RIGHT, is_first=True)
             add_header_line_to_cell(cell_right, c_level, is_arabic=False, align=WD_ALIGN_PARAGRAPH.RIGHT, is_first=False)
             add_header_line_to_cell(cell_right, f"Année scolaire: {s_year}", is_arabic=False, align=WD_ALIGN_PARAGRAPH.RIGHT, is_first=False)
 
-        # الخلية الوسطى (الشعار)
         cell_1 = row.cells[1]
         if is_arabic:
             set_cell_rtl(cell_1)
@@ -527,7 +529,6 @@ def process_docx(
 
         ensure_valid_header_xml(section)
 
-        # --- معالجة التذييل المتماثل ديناميكياً ---
         if add_footer:
             footers_to_process = [section.footer]
             if section.different_first_page_header_footer:
@@ -616,13 +617,10 @@ if uploaded_files and st.button(btn_label):
             header_space=header_space,
             border_color_hex=border_color,
         )
-        st.success("تم تحديث الملف بنجاح!" if is_arabic else "Le fichier a été mis à jour avec succès!")
-        st.download_button(
-            label="📥 " + ("تحميل الملف الجاهز" if is_arabic else "Télécharger le fichier"),
-            data=processed_file,
-            file_name=f"محدث_{single_file.name}",
-            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        )
+        st.session_state.processed_data = processed_file
+        st.session_state.processed_filename = f"محدث_{single_file.name}"
+        st.session_state.processed_mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        st.session_state.success_msg = "تم تحديث الملف بنجاح!" if is_arabic else "Le fichier a été mis à jour avec succès!"
     else:
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
@@ -647,13 +645,22 @@ if uploaded_files and st.button(btn_label):
                 )
 
         zip_buffer.seek(0)
-        st.success(f"تم تحديث {num_files} ملفات بنجاح!" if is_arabic else f"{num_files} fichiers mis à jour avec succès!")
-        st.download_button(
-            label="📥 " + ("تحميل جميع الملفات المحدثة (.zip)" if is_arabic else "Télécharger tous les fichiers (.zip)"),
-            data=zip_buffer,
-            file_name="الملفات_المحدثة.zip",
-            mime="application/zip",
-        )
+        st.session_state.processed_data = zip_buffer
+        st.session_state.processed_filename = "الملفات_المحدثة.zip"
+        st.session_state.processed_mime = "application/zip"
+        st.session_state.success_msg = f"تم تحديث {num_files} ملفات بنجاح!" if is_arabic else f"{num_files} fichiers mis à jour avec succès!"
+
+# إظهار زر التنزيل ورسالة النجاح بشكل ثابت طالما تم توليد الملف بنجاح
+if st.session_state.processed_data is not None and uploaded_files:
+    st.success(st.session_state.success_msg)
+    st.download_button(
+        label="📥 " + ("تحميل الملف الجاهز" if is_arabic else "Télécharger le fichier")
+        if len(uploaded_files) == 1
+        else "📥 " + ("تحميل جميع الملفات المحدثة (.zip)" if is_arabic else "Télécharger tous les fichiers (.zip)"),
+        data=st.session_state.processed_data,
+        file_name=st.session_state.processed_filename,
+        mime=st.session_state.processed_mime,
+    )
 
 # --- تذييل الصفحة وتوقيع المطور ---
 st.markdown(
