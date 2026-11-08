@@ -6,14 +6,14 @@ import zipfile
 import docx
 import streamlit as st
 from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT, WD_TABLE_ALIGNMENT
-from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_TAB_ALIGNMENT
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Inches, Pt
 
 
 def get_auto_school_year():
-    """حساب الموسم الدراسي تلقائياً أوتوماتيكياً خلف الكواليس"""
+    """حساب الموسم الدراسي تلقائياً خلف الكواليس"""
     today = datetime.date.today()
     current_year = today.year
     if today.month < 9:
@@ -23,7 +23,7 @@ def get_auto_school_year():
 
 
 def get_static_logo_data_uri():
-    """قراءة صورة الشعار المحلي الثابت فقط لاستخدامها كخلفية دائمية خلف العنوان"""
+    """قراءة صورة الشعار المحلي الثابت لاستخدامها كخلفية دائمية خلف العنوان"""
     for filename in ["logo.jpg", "logo.png", "logo.jpeg", "LOGO.JPG", "LOGO.PNG"]:
         if os.path.exists(filename):
             try:
@@ -40,7 +40,7 @@ def get_static_logo_data_uri():
 
 
 def get_logo_bytes(uploaded_logo):
-    """تحديد الشعار الخاص بملف Word (الملف المرفوع أو الصورة المحلية)"""
+    """تحديد الشعار الخاص بملف Word"""
     if uploaded_logo is not None:
         return io.BytesIO(uploaded_logo.getvalue())
 
@@ -63,7 +63,7 @@ def clear_and_prepare_headers(section):
 
 
 def clear_all_footers_completely(section):
-    """حذف وتفريغ جميع التذييلات والخطوط القديمة نهائياً عند إلغاء تفعيل التذييل"""
+    """حذف وتفريغ جميع التذييلات القديمة نهائياً"""
     section.footer.is_linked_to_previous = False
     section.first_page_footer.is_linked_to_previous = False
 
@@ -83,23 +83,6 @@ def clear_all_footers_completely(section):
             pPr.remove(pBdr)
 
 
-def remove_table_borders(table):
-    """إزالة جميع الحدود والخطوط الفاصلة والشبكية لجدول التذييل تماماً"""
-    tblPr = table._tbl.tblPr
-    for existing_bdr in tblPr.findall(qn("w:tblBorders")):
-        tblPr.remove(existing_bdr)
-
-    tblBorders = OxmlElement("w:tblBorders")
-    for border_name in ["top", "left", "bottom", "right", "insideH", "insideV"]:
-        border = OxmlElement(f"w:{border_name}")
-        border.set(qn("w:val"), "none")
-        border.set(qn("w:sz"), "0")
-        border.set(qn("w:space"), "0")
-        border.set(qn("w:color"), "auto")
-        tblBorders.append(border)
-    tblPr.append(tblBorders)
-
-
 def ensure_valid_header_xml(section):
     """ضمان وجود فقرة واحدة على الأقل في الترويسات غير المستعملة لمنع تلف XML"""
     for h in [section.header, section.first_page_header]:
@@ -108,7 +91,7 @@ def ensure_valid_header_xml(section):
 
 
 def set_cell_rtl(cell):
-    """إجبار الخلية على التوجيه من اليمين إلى اليسار (خاص باللغة العربية)"""
+    """إجبار الخلية على التوجيه من اليمين إلى اليسار"""
     tcPr = cell._tc.get_or_add_tcPr()
     if tcPr.find(qn("w:bidi")) is None:
         tcPr.append(OxmlElement("w:bidi"))
@@ -117,7 +100,7 @@ def set_cell_rtl(cell):
 def add_styled_run(
     paragraph, text, is_arabic=True, font_size=10.5, bold=False
 ):
-    """إضافة نص مع مراعاة اتجاه اللغة (RTL للعربية و LTR للفرنسية)"""
+    """إضافة نص مع مراعاة اتجاه اللغة"""
     if is_arabic:
         paragraph.paragraph_format.bidi = True
         pPr = paragraph._p.get_or_add_pPr()
@@ -180,7 +163,7 @@ st.set_page_config(
     page_title="Générateur d'En-tête Scolaire 📝", page_icon="📝", layout="centered"
 )
 
-# 1. اختيار لغة الواجهة والترويسة (الفرنسية افتراضياً)
+# 1. اختيار لغة الواجهة والترويسة
 lang = st.radio(
     "Langue de l'en-tête / لغة الترويسة:",
     ["Français", "العربية"],
@@ -197,7 +180,6 @@ else:
     page_title_html = "📝 Générateur d'En-tête<br><span style='font-size: 0.9em;'>Scolaire</span>"
     page_subtitle_text = "Solution rapide et élégante pour personnaliser, automatiser et uniformiser les en-têtes et pieds de page de vos fichiers Word (.docx) pédagogiques."
 
-# تحضير أنيميشن الانبثاق كلمة كلمة للوصف مع ضمان اتجاه النص
 words = page_subtitle_text.split()
 animated_subtitle_html = "".join(
     [
@@ -206,7 +188,7 @@ animated_subtitle_html = "".join(
     ]
 )
 
-# 3. بناء خلفية العنوان الثابتة والترتيب التماثلي للعنوان والوصف
+# 3. بناء خلفية العنوان الثابتة
 header_container = st.container()
 static_logo_uri = get_static_logo_data_uri()
 bg_style = ""
@@ -302,7 +284,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# حساب الموسم الدراسي تلقائياً خلف الكواليس
 auto_school_year = get_auto_school_year()
 
 # 5. خانات المديرية والمؤسسة
@@ -322,7 +303,7 @@ with col_sch2:
         else "Lycée Qualifiant Oulad Daoud",
     )
 
-# 6. باقي خانات الإدخال الشخصية والدراسية
+# 6. باقي خانات الإدخال
 col1, col2 = st.columns(2)
 with col1:
     teacher_name = st.text_input(
@@ -525,60 +506,52 @@ def process_docx(
 
         ensure_valid_header_xml(section)
 
+        # --- معالجة التذييل بدون استخدام جداول نهائياً (باستخدام Tab Stop) ---
         if add_footer:
             footers_to_process = [section.footer]
             if section.different_first_page_header_footer:
                 footers_to_process.append(section.first_page_footer)
 
             for footer_target in footers_to_process:
+                # مسح كامل المحتويات والجداول القديمة
                 for p in list(footer_target.paragraphs):
                     p._p.getparent().remove(p._p)
                 for t in list(footer_target.tables):
                     t._tbl.getparent().remove(t._tbl)
 
-                tbl_footer = footer_target.add_table(
-                    rows=1, cols=2, width=Inches(7.2)
-                )
-                tbl_footer.alignment = WD_TABLE_ALIGNMENT.CENTER
-                if is_arabic:
-                    tbl_footer._tbl.tblPr.insert(0, OxmlElement("w:bidiVisual"))
+                # إضافة فقرة واحدة ناصعة في التذييل
+                p_foot = footer_target.add_paragraph()
+                p_foot.paragraph_format.space_before = Pt(0)
+                p_foot.paragraph_format.space_after = Pt(0)
 
-                # إزالة خطوط وحدود جدول التذييل نهائياً
-                remove_table_borders(tbl_footer)
-
-                row_f = tbl_footer.rows[0]
-                row_f.cells[0].width = Inches(3.6)
-                row_f.cells[1].width = Inches(3.6)
+                # تحديد موقع التبويب عند أقصى هامش الصفحة (6.8 بوصة)
+                tab_position = Inches(6.8)
 
                 if is_arabic:
-                    cell_f_r = row_f.cells[0]
-                    set_cell_rtl(cell_f_r)
-                    p_f_r = cell_f_r.paragraphs[0]
-                    p_f_r.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-                    add_styled_run(
-                        p_f_r, t_name, is_arabic, font_size=10, bold=False
+                    p_foot.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+                    p_foot.paragraph_format.tab_stops.add_tab_stop(
+                        tab_position, WD_TAB_ALIGNMENT.LEFT
                     )
 
-                    cell_f_l = row_f.cells[1]
-                    set_cell_rtl(cell_f_l)
-                    p_f_l = cell_f_l.paragraphs[0]
-                    p_f_l.alignment = WD_ALIGN_PARAGRAPH.LEFT
                     add_styled_run(
-                        p_f_l, s_year, is_arabic, font_size=10, bold=False
+                        p_foot, t_name, is_arabic=True, font_size=10, bold=False
+                    )
+                    p_foot.add_run("\t")
+                    add_styled_run(
+                        p_foot, s_year, is_arabic=True, font_size=10, bold=False
                     )
                 else:
-                    cell_f_l = row_f.cells[0]
-                    p_f_l = cell_f_l.paragraphs[0]
-                    p_f_l.alignment = WD_ALIGN_PARAGRAPH.LEFT
-                    add_styled_run(
-                        p_f_l, s_year, is_arabic, font_size=10, bold=False
+                    p_foot.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                    p_foot.paragraph_format.tab_stops.add_tab_stop(
+                        tab_position, WD_TAB_ALIGNMENT.RIGHT
                     )
 
-                    cell_f_r = row_f.cells[1]
-                    p_f_r = cell_f_r.paragraphs[0]
-                    p_f_r.alignment = WD_ALIGN_PARAGRAPH.RIGHT
                     add_styled_run(
-                        p_f_r, t_name, is_arabic, font_size=10, bold=False
+                        p_foot, s_year, is_arabic=False, font_size=10, bold=False
+                    )
+                    p_foot.add_run("\t")
+                    add_styled_run(
+                        p_foot, t_name, is_arabic=False, font_size=10, bold=False
                     )
         else:
             clear_all_footers_completely(section)
