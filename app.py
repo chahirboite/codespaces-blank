@@ -190,7 +190,7 @@ st.set_page_config(
     page_title="Générateur d'En-tête Scolaire 📝", page_icon="📝", layout="centered"
 )
 
-# التهيئة الأولية لذاكرة الجلسة (Session State) للحفاظ على زر التحميل ثابتاً
+# التهيئة الأولية لذاكرة الجلسة (Session State)
 if "processed_data" not in st.session_state:
     st.session_state.processed_data = None
 if "processed_filename" not in st.session_state:
@@ -208,6 +208,68 @@ lang = st.radio(
 )
 is_arabic = lang == "العربية"
 text_dir = "rtl" if is_arabic else "ltr"
+
+# --- القائمة الجانبية (Sidebar): البطاقة التعريفية، المميزات والتواصل ---
+with st.sidebar:
+    st.header("ℹ️ " + ("حول المشروع والتواصل" if is_arabic else "À propos & Contact"))
+    st.markdown("---")
+
+    # 1. العبارة التعريفية للشريط الجانبي
+    st.subheader("📌 " + ("نبذة عن التطبيق" if is_arabic else "À propos"))
+    if is_arabic:
+        st.write(
+            "**الترويسة المدرسية الذكية** هي أداة سريعة طورها **الأستاذ عثمان شهير** بهدف أتمتة وتوحيد الهوية البصرية للوثائق والجذاذات والامتحانات التعليمية بصيغة (`.docx`). يضمن التطبيق تناظراً هندسياً مثالياً، خطوطاً ناصعة دون انكسار للأعمدة، وتحديثاً فورياً للمواسم الدراسية والشعارات."
+        )
+    else:
+        st.write(
+            "**Générateur d'En-tête Scolaire** est une solution conçue par **Prof. OTHMAN CHAHIR** pour automatiser et uniformiser la mise en page (en-tête et pied de page) de vos documents pédagogiques Word (`.docx`). Elle garantit une symétrie parfaite, zéro chevauchement de texte et une gestion dynamique des logos et de l'année scolaire."
+        )
+
+    st.markdown("---")
+
+    # 2. نقاط القوة والمميزات
+    st.subheader("✨ " + ("مميزات التطبيق" if is_arabic else "Caractéristiques"))
+    if is_arabic:
+        st.markdown(
+            """
+            * 🚀 **معالجة دفعة ملفات:** تحويل وتحديث ملفات متعددة وضغطها في ملف ZIP.
+            * ⚖️ **توازن وتناظر تلقائي:** خوارزمية ذكية تمنع انكسار النص للسطر نهائياً.
+            * 📅 **موسم دراسي أوتوماتيكي:** حساب وحقن الموسم الدراسي تلقائياً.
+            * 🎨 **مرونة التخصيص:** دعم شعار المؤسسة الخاص، والتنقل بين العربية والفرنسية.
+            """
+        )
+    else:
+        st.markdown(
+            """
+            * 🚀 **Traitement par lots:** Conversion et compression en fichier ZIP.
+            * ⚖️ **Symétrie parfaite:** Alignement automatique sans retour à la ligne.
+            * 📅 **Année scolaire auto:** Calcul et mise à jour automatique.
+            * 🎨 **Personnalisation:** Support du logo propre et bilingue.
+            """
+        )
+
+    st.markdown("---")
+
+    # 3. التواصل والإدلاء بالملاحظات
+    st.subheader("💬 " + ("التواصل والإدلاء بالملاحظات" if is_arabic else "Contact & Feedback"))
+    if is_arabic:
+        st.caption(
+            "رأيك وصوتك يهمنا لتطوير الأداة! إذا كان لديك أي اقتراح، ملاحظة حول التنسيق، أو استفسار، لا تتردد في التواصل المباشر مع المطور."
+        )
+    else:
+        st.caption(
+            "Votre avis compte ! Pour toute suggestion, remarque sur la mise en page ou demande, n'hésitez pas à contacter directement le développeur."
+        )
+
+    developer_email = "chahirboite@gmail.com"
+    email_subject = "Stremalit App Feedback - الترويسة المدرسية الذكية"
+
+    st.markdown(f"**{'المطور' if is_arabic else 'Développeur'}:** CHAHIR OTHMAN")
+    st.link_button(
+        label="📧 " + ("إرسال بريد إلكتروني" if is_arabic else "Envoyer un Email"),
+        url=f"mailto:{developer_email}?subject={email_subject}",
+        use_container_width=True,
+    )
 
 # 2. تحديد العنوان والوصف التفصيلي
 if is_arabic:
@@ -650,7 +712,7 @@ if uploaded_files and st.button(btn_label):
         st.session_state.processed_mime = "application/zip"
         st.session_state.success_msg = f"تم تحديث {num_files} ملفات بنجاح!" if is_arabic else f"{num_files} fichiers mis à jour avec succès!"
 
-# إظهار زر التنزيل ورسالة النجاح بشكل ثابت طالما تم توليد الملف بنجاح
+# إظهار زر التنزيل ورسالة النجاح بشكل ثابت
 if st.session_state.processed_data is not None and uploaded_files:
     st.success(st.session_state.success_msg)
     st.download_button(
