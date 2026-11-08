@@ -97,6 +97,13 @@ def set_cell_rtl(cell):
         tcPr.append(OxmlElement("w:bidi"))
 
 
+def set_cell_no_wrap(cell):
+    """منع انكسار النص والرجوع للسطر كلياً على مستوى هيكل XML الخاص بـ Word"""
+    tcPr = cell._tc.get_or_add_tcPr()
+    if tcPr.find(qn("w:noWrap")) is None:
+        tcPr.append(OxmlElement("w:noWrap"))
+
+
 def add_styled_run(
     paragraph, text, is_arabic=True, font_size=10.0, bold=False
 ):
@@ -130,16 +137,16 @@ def add_header_line_to_cell(cell, text, is_arabic, align, is_first=False):
     p.alignment = align
     p.paragraph_format.space_before = Pt(0)
     p.paragraph_format.space_after = Pt(2)
-    p.paragraph_format.line_spacing = 1.05
+    p.paragraph_format.line_spacing = 1.0
 
-    # خوارزمية قياس طول النص وضبط الحجم تلقائياً
+    # خوارزمية دقيقة لتعديل حجم الخط تلقائياً بناءً على طول النص
     length = len(text)
-    if length > 44:
+    if length > 38:
         font_size = 7.5
-    elif length > 36:
-        font_size = 8.5
-    elif length > 28:
-        font_size = 9.2
+    elif length > 30:
+        font_size = 8.2
+    elif length > 22:
+        font_size = 9.0
     else:
         font_size = 10.0
 
@@ -448,7 +455,7 @@ def process_docx(
             section.different_first_page_header_footer = False
             header = section.header
 
-        # بناء الجدول بعرض موسع لتوسيع الخلايا الجانبية (2.9 بوصة لكل منها)
+        # بناء الجدول وتوزيع العرض (3.1 بوصة لكل خلية جانبية)
         tbl = header.add_table(rows=1, cols=3, width=Inches(7.2))
         tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
         tblPr = tbl._tbl.tblPr
@@ -466,12 +473,13 @@ def process_docx(
         tblPr.append(tblBorders)
 
         row = tbl.rows[0]
-        col_widths = [Inches(2.9), Inches(1.4), Inches(2.9)]
+        col_widths = [Inches(3.1), Inches(1.0), Inches(3.1)]
         for i, cell in enumerate(row.cells):
             cell.width = col_widths[i]
             cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
+            set_cell_no_wrap(cell)  # منع انكسار الأسطر على مستوى XML
 
-        # بناء سطور الترويسة الستة بضمان التناظر التام وضبط الخطوط أوتوماتيكياً
+        # بناء سطور الترويسة الستة بدون سابقة Niveau: وبمنع كلي للرجوع للسطر
         if is_arabic:
             # الجانب الأيمن (عربي)
             cell_right = row.cells[0]
@@ -493,10 +501,10 @@ def process_docx(
             add_header_line_to_cell(cell_left, s_name, is_arabic=False, align=WD_ALIGN_PARAGRAPH.LEFT, is_first=False)
             add_header_line_to_cell(cell_left, f"Professeur: {t_name}", is_arabic=False, align=WD_ALIGN_PARAGRAPH.LEFT, is_first=False)
 
-            # الجانب الأيمن (فرنسي)
+            # الجانب الأيمن (فرنسي - تم حذف كلمة Niveau: المباشرة)
             cell_right = row.cells[2]
             add_header_line_to_cell(cell_right, f"Matière: {subj}", is_arabic=False, align=WD_ALIGN_PARAGRAPH.RIGHT, is_first=True)
-            add_header_line_to_cell(cell_right, f"Niveau: {c_level}", is_arabic=False, align=WD_ALIGN_PARAGRAPH.RIGHT, is_first=False)
+            add_header_line_to_cell(cell_right, c_level, is_arabic=False, align=WD_ALIGN_PARAGRAPH.RIGHT, is_first=False)
             add_header_line_to_cell(cell_right, f"Année scolaire: {s_year}", is_arabic=False, align=WD_ALIGN_PARAGRAPH.RIGHT, is_first=False)
 
         # الخلية الوسطى (الشعار)
@@ -509,7 +517,7 @@ def process_docx(
             try:
                 if isinstance(logo_file, io.BytesIO):
                     logo_file.seek(0)
-                p_1.add_run().add_picture(logo_file, width=Inches(1.4))
+                p_1.add_run().add_picture(logo_file, width=Inches(1.2))
             except Exception:
                 pass
 
