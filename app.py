@@ -83,6 +83,23 @@ def clear_all_footers_completely(section):
             pPr.remove(pBdr)
 
 
+def remove_table_borders(table):
+    """إزالة جميع الحدود والخطوط الفاصلة والشبكية لجدول التذييل تماماً"""
+    tblPr = table._tbl.tblPr
+    for existing_bdr in tblPr.findall(qn("w:tblBorders")):
+        tblPr.remove(existing_bdr)
+
+    tblBorders = OxmlElement("w:tblBorders")
+    for border_name in ["top", "left", "bottom", "right", "insideH", "insideV"]:
+        border = OxmlElement(f"w:{border_name}")
+        border.set(qn("w:val"), "none")
+        border.set(qn("w:sz"), "0")
+        border.set(qn("w:space"), "0")
+        border.set(qn("w:color"), "auto")
+        tblBorders.append(border)
+    tblPr.append(tblBorders)
+
+
 def ensure_valid_header_xml(section):
     """ضمان وجود فقرة واحدة على الأقل في الترويسات غير المستعملة لمنع تلف XML"""
     for h in [section.header, section.first_page_header]:
@@ -525,6 +542,9 @@ def process_docx(
                 tbl_footer.alignment = WD_TABLE_ALIGNMENT.CENTER
                 if is_arabic:
                     tbl_footer._tbl.tblPr.insert(0, OxmlElement("w:bidiVisual"))
+
+                # إزالة خطوط وحدود جدول التذييل نهائياً
+                remove_table_borders(tbl_footer)
 
                 row_f = tbl_footer.rows[0]
                 row_f.cells[0].width = Inches(3.6)
