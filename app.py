@@ -412,7 +412,6 @@ def process_docx(
     clean_hex = border_color_hex.lstrip("#")
 
     for section in doc.sections:
-        # إبعاد محتوى الصفحة عن التذييل وضبط مسافة التذييل أسفل الصفحة
         section.top_margin = Inches(1.0)
         section.bottom_margin = Inches(1.2)
         section.header_distance = Inches(0.4)
@@ -508,20 +507,20 @@ def process_docx(
 
         ensure_valid_header_xml(section)
 
-        # --- معالجة التذييل المتماثل ديناميكياً مع مركز الصفحة ---
+        # --- معالجة التذييل المتماثل ديناميكياً مع تحويل القيم إلى أعداد صحيحة ---
         if add_footer:
             footers_to_process = [section.footer]
             if section.different_first_page_header_footer:
                 footers_to_process.append(section.first_page_footer)
 
-            # حساب عرض الطباعة ومركز الصفحة الهندسي بدقة
             page_w = section.page_width if section.page_width else Inches(8.27)
             margin_l = section.left_margin if section.left_margin else Inches(0.75)
             margin_r = section.right_margin if section.right_margin else Inches(0.75)
             printable_w = page_w - margin_l - margin_r
 
-            center_pos = printable_w / 2
-            right_pos = printable_w
+            # تحويل قيم التبويب إلى أعداد صحيحة لمنع خطأ TypeError
+            center_pos = int(printable_w / 2)
+            right_pos = int(printable_w)
 
             for footer_target in footers_to_process:
                 for p in list(footer_target.paragraphs):
@@ -535,7 +534,6 @@ def process_docx(
                 p_foot.paragraph_format.left_indent = Inches(0)
                 p_foot.paragraph_format.right_indent = Inches(0)
 
-                # إضافة نقطة تبويب ممتدة للمركز بالتموضع المتماثل صراحة
                 p_foot.paragraph_format.tab_stops.add_tab_stop(
                     center_pos, WD_TAB_ALIGNMENT.CENTER
                 )
@@ -546,15 +544,11 @@ def process_docx(
                     )
                     p_foot.alignment = WD_ALIGN_PARAGRAPH.RIGHT
 
-                    # 1. العنصر الأيمن: اسم الأستاذ
                     add_styled_run(
                         p_foot, t_name, is_arabic=True, font_size=10, bold=False
                     )
-                    # 2. التبويب الأول (الانتقال لمركز الصفحة - محجوز لرقم الصفحة)
                     p_foot.add_run("\t")
-                    # 3. التبويب الثاني (الانتقال لأقصى اليسار المتماثل)
                     p_foot.add_run("\t")
-                    # 4. العنصر الأيسر: الموسم الدراسي
                     add_styled_run(
                         p_foot, s_year, is_arabic=False, font_size=10, bold=False
                     )
@@ -564,15 +558,11 @@ def process_docx(
                     )
                     p_foot.alignment = WD_ALIGN_PARAGRAPH.LEFT
 
-                    # 1. العنصر الأيسر: الموسم الدراسي
                     add_styled_run(
                         p_foot, s_year, is_arabic=False, font_size=10, bold=False
                     )
-                    # 2. التبويب الأول (الانتقال لمركز الصفحة - محجوز لرقم الصفحة)
                     p_foot.add_run("\t")
-                    # 3. التبويب الثاني (الانتقال لأقصى اليمين المتماثل)
                     p_foot.add_run("\t")
-                    # 4. العنصر الأيمن: اسم الأستاذ
                     add_styled_run(
                         p_foot, t_name, is_arabic=False, font_size=10, bold=False
                     )
