@@ -170,16 +170,17 @@ lang = st.radio(
     horizontal=True,
 )
 is_arabic = lang == "العربية"
+text_dir = "rtl" if is_arabic else "ltr"
 
-# 2. تحديد العنوان والوصف التفصيلي (الاقتراح الثاني)
+# 2. تحديد العنوان والوصف التفصيلي
 if is_arabic:
-    page_title_html = "📝 الترويسة المدرسية<br><span style='font-size: 0.92em;'>الذكية</span>"
+    page_title_html = "📝 الترويسة المدرسية<br><span style='font-size: 0.9em;'>الذكية</span>"
     page_subtitle_text = "حل سريع وأنيق لتخصيص وتوحيد الترويسات المدرسية وشعارات المؤسسات على جميع ملفات Word (.docx) التعليمية."
 else:
-    page_title_html = "📝 Générateur d'En-tête<br><span style='font-size: 0.92em;'>Scolaire</span>"
+    page_title_html = "📝 Générateur d'En-tête<br><span style='font-size: 0.9em;'>Scolaire</span>"
     page_subtitle_text = "Solution rapide et élégante pour personnaliser, automatiser et uniformiser les en-têtes et pieds de page de vos fichiers Word (.docx) pédagogiques."
 
-# تحضير أنيميشن الانبثاق كلمة كلمة للوصف
+# تحضير أنيميشن الانبثاق كلمة كلمة للوصف مع ضمان اتجاه النص
 words = page_subtitle_text.split()
 animated_subtitle_html = "".join(
     [
@@ -218,14 +219,14 @@ with header_container:
         .responsive-title {{
             color: #1e293b;
             margin: 0;
-            font-size: clamp(1.25rem, 4.2vw, 1.65rem);
+            font-size: clamp(1.2rem, 4vw, 1.6rem);
             font-weight: 800;
             font-family: 'Segoe UI', Tahoma, Geneva, sans-serif;
-            line-height: 1.25;
+            line-height: 1.3;
             text-align: center;
         }}
         </style>
-        <div style="
+        <div dir="{text_dir}" style="
             position: relative;
             padding: 24px 16px;
             border-radius: 14px;
@@ -234,12 +235,13 @@ with header_container:
             border: 1px solid #e2e8f0;
             background-color: #ffffff;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.04);
+            direction: {text_dir};
             {bg_style}
         ">
-            <h1 class="responsive-title">
+            <h1 class="responsive-title" style="direction: {text_dir};">
                 {page_title_html}
             </h1>
-            <p style="color: #1e293b; margin-top: 12px; margin-bottom: 0; font-size: clamp(0.85rem, 2.9vw, 0.98rem); font-weight: 600; line-height: 1.55; max-width: 650px; margin-left: auto; margin-right: auto;">
+            <p style="color: #1e293b; margin-top: 12px; margin-bottom: 0; font-size: clamp(0.85rem, 2.9vw, 0.98rem); font-weight: 600; line-height: 1.6; max-width: 650px; margin-left: auto; margin-right: auto; direction: {text_dir}; text-align: center;">
                 {animated_subtitle_html}
             </p>
         </div>
