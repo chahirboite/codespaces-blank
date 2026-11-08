@@ -98,7 +98,7 @@ def set_cell_rtl(cell):
 
 
 def add_styled_run(
-    paragraph, text, is_arabic=True, font_size=10.5, bold=False
+    paragraph, text, is_arabic=True, font_size=10.0, bold=False
 ):
     """إضافة نص مع مراعاة اتجاه اللغة"""
     if is_arabic:
@@ -122,6 +122,28 @@ def add_styled_run(
         run.bold = bold
 
     return run
+
+
+def add_header_line_to_cell(cell, text, is_arabic, align, is_first=False):
+    """إضافة سطر مستقل داخل الخلية مع تعديل حجم الخط تلقائياً لمنع الرجوع للسطر نهائياً"""
+    p = cell.paragraphs[0] if is_first else cell.add_paragraph()
+    p.alignment = align
+    p.paragraph_format.space_before = Pt(0)
+    p.paragraph_format.space_after = Pt(2)
+    p.paragraph_format.line_spacing = 1.05
+
+    # خوارزمية قياس طول النص وضبط الحجم تلقائياً
+    length = len(text)
+    if length > 44:
+        font_size = 7.5
+    elif length > 36:
+        font_size = 8.5
+    elif length > 28:
+        font_size = 9.2
+    else:
+        font_size = 10.0
+
+    add_styled_run(p, text, is_arabic=is_arabic, font_size=font_size, bold=True)
 
 
 # --- قائمة مستويات الثانوي التأهيلي المغربي ---
@@ -426,6 +448,7 @@ def process_docx(
             section.different_first_page_header_footer = False
             header = section.header
 
+        # بناء الجدول بعرض موسع لتوسيع الخلايا الجانبية (2.9 بوصة لكل منها)
         tbl = header.add_table(rows=1, cols=3, width=Inches(7.2))
         tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
         tblPr = tbl._tbl.tblPr
@@ -443,36 +466,40 @@ def process_docx(
         tblPr.append(tblBorders)
 
         row = tbl.rows[0]
-
-        col_widths = [Inches(2.8), Inches(1.6), Inches(2.8)]
+        col_widths = [Inches(2.9), Inches(1.4), Inches(2.9)]
         for i, cell in enumerate(row.cells):
             cell.width = col_widths[i]
             cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
 
+        # بناء سطور الترويسة الستة بضمان التناظر التام وضبط الخطوط أوتوماتيكياً
         if is_arabic:
-            right_text = (
-                f"مادة {subj}\n{c_level}\nالموسم الدراسي: {s_year}"
-            )
-            left_text = f"المديرية الإقليمية: {d_name}\n{s_name}\nالأستاذ: {t_name}"
+            # الجانب الأيمن (عربي)
+            cell_right = row.cells[0]
+            set_cell_rtl(cell_right)
+            add_header_line_to_cell(cell_right, f"مادة {subj}", is_arabic=True, align=WD_ALIGN_PARAGRAPH.RIGHT, is_first=True)
+            add_header_line_to_cell(cell_right, c_level, is_arabic=True, align=WD_ALIGN_PARAGRAPH.RIGHT, is_first=False)
+            add_header_line_to_cell(cell_right, f"الموسم الدراسي: {s_year}", is_arabic=True, align=WD_ALIGN_PARAGRAPH.RIGHT, is_first=False)
+
+            # الجانب الأيسر (عربي)
+            cell_left = row.cells[2]
+            set_cell_rtl(cell_left)
+            add_header_line_to_cell(cell_left, f"المديرية الإقليمية: {d_name}", is_arabic=True, align=WD_ALIGN_PARAGRAPH.LEFT, is_first=True)
+            add_header_line_to_cell(cell_left, s_name, is_arabic=True, align=WD_ALIGN_PARAGRAPH.LEFT, is_first=False)
+            add_header_line_to_cell(cell_left, f"الأستاذ: {t_name}", is_arabic=True, align=WD_ALIGN_PARAGRAPH.LEFT, is_first=False)
         else:
-            left_text = f"Direction Provinciale: {d_name}\n{s_name}\nProfesseur: {t_name}"
-            right_text = f"Matière: {subj}\nNiveau: {c_level}\nAnnée scolaire: {s_year}"
+            # الجانب الأيسر (فرنسي)
+            cell_left = row.cells[0]
+            add_header_line_to_cell(cell_left, f"Direction Provinciale: {d_name}", is_arabic=False, align=WD_ALIGN_PARAGRAPH.LEFT, is_first=True)
+            add_header_line_to_cell(cell_left, s_name, is_arabic=False, align=WD_ALIGN_PARAGRAPH.LEFT, is_first=False)
+            add_header_line_to_cell(cell_left, f"Professeur: {t_name}", is_arabic=False, align=WD_ALIGN_PARAGRAPH.LEFT, is_first=False)
 
-        cell_0 = row.cells[0]
-        if is_arabic:
-            set_cell_rtl(cell_0)
-        p_0 = cell_0.paragraphs[0]
-        p_0.alignment = (
-            WD_ALIGN_PARAGRAPH.RIGHT if is_arabic else WD_ALIGN_PARAGRAPH.LEFT
-        )
-        add_styled_run(
-            p_0,
-            right_text if is_arabic else left_text,
-            is_arabic,
-            font_size=10.5,
-            bold=True,
-        )
+            # الجانب الأيمن (فرنسي)
+            cell_right = row.cells[2]
+            add_header_line_to_cell(cell_right, f"Matière: {subj}", is_arabic=False, align=WD_ALIGN_PARAGRAPH.RIGHT, is_first=True)
+            add_header_line_to_cell(cell_right, f"Niveau: {c_level}", is_arabic=False, align=WD_ALIGN_PARAGRAPH.RIGHT, is_first=False)
+            add_header_line_to_cell(cell_right, f"Année scolaire: {s_year}", is_arabic=False, align=WD_ALIGN_PARAGRAPH.RIGHT, is_first=False)
 
+        # الخلية الوسطى (الشعار)
         cell_1 = row.cells[1]
         if is_arabic:
             set_cell_rtl(cell_1)
@@ -482,24 +509,9 @@ def process_docx(
             try:
                 if isinstance(logo_file, io.BytesIO):
                     logo_file.seek(0)
-                p_1.add_run().add_picture(logo_file, width=Inches(1.5))
+                p_1.add_run().add_picture(logo_file, width=Inches(1.4))
             except Exception:
                 pass
-
-        cell_2 = row.cells[2]
-        if is_arabic:
-            set_cell_rtl(cell_2)
-        p_2 = cell_2.paragraphs[0]
-        p_2.alignment = (
-            WD_ALIGN_PARAGRAPH.LEFT if is_arabic else WD_ALIGN_PARAGRAPH.RIGHT
-        )
-        add_styled_run(
-            p_2,
-            left_text if is_arabic else right_text,
-            is_arabic,
-            font_size=10.5,
-            bold=True,
-        )
 
         p_space = header.add_paragraph()
         p_space.paragraph_format.space_before = Pt(0)
@@ -507,7 +519,7 @@ def process_docx(
 
         ensure_valid_header_xml(section)
 
-        # --- معالجة التذييل المتماثل ديناميكياً مع تحويل القيم إلى أعداد صحيحة ---
+        # --- معالجة التذييل المتماثل ديناميكياً ---
         if add_footer:
             footers_to_process = [section.footer]
             if section.different_first_page_header_footer:
@@ -518,7 +530,6 @@ def process_docx(
             margin_r = section.right_margin if section.right_margin else Inches(0.75)
             printable_w = page_w - margin_l - margin_r
 
-            # تحويل قيم التبويب إلى أعداد صحيحة لمنع خطأ TypeError
             center_pos = int(printable_w / 2)
             right_pos = int(printable_w)
 
