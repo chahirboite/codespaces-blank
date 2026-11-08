@@ -160,13 +160,29 @@ LEVELS_FR = [
 
 # --- إعدادات صفحة Streamlit ---
 st.set_page_config(
-    page_title="الترويسة المدرسية الذكية 📝", page_icon="📝", layout="centered"
+    page_title="Générateur d'En-tête Scolaire 📝", page_icon="📝", layout="centered"
 )
 
-# 1. حاوية عنوان الصفحة
-header_container = st.container()
+# 1. اختيار لغة الواجهة والترويسة (الفرنسية افتراضياً)
+lang = st.radio(
+    "Langue de l'en-tête / لغة الترويسة:",
+    ["Français", "العربية"],
+    horizontal=True,
+)
+is_arabic = lang == "العربية"
 
-# 2. بناء خلفية العنوان الثابتة
+# 2. تحديد العنوان والوصف الديناميكيين بحسب اللغة
+if is_arabic:
+    page_title_text = "📝 الترويسة المدرسية الذكية"
+    page_subtitle_text = "دمج وتحديث ترويسة وتذييل الملفات التعليمية تلقائياً وبشكل أنيق"
+else:
+    page_title_text = "📝 Générateur d'En-tête Scolaire"
+    page_subtitle_text = (
+        "Fusion et mise à jour automatique et élégante des en-têtes et pieds de page"
+    )
+
+# 3. بناء خلفية العنوان الثابتة والعنوان الديناميكي
+header_container = st.container()
 static_logo_uri = get_static_logo_data_uri()
 bg_style = ""
 if static_logo_uri:
@@ -187,30 +203,30 @@ with header_container:
             {bg_style}
         ">
             <h1 style="color: #1e293b; margin: 0; font-size: 2.1rem; font-weight: 800; font-family: 'Segoe UI', Tahoma, Geneva, sans-serif;">
-                📝 الترويسة المدرسية الذكية
+                {page_title_text}
             </h1>
             <p style="color: #1e293b; margin-top: 8px; margin-bottom: 0; font-size: 1.05rem; font-weight: 700;">
-                دمج وتحديث ترويسة وتذييل الملفات التعليمية تلقائياً وبشكل أنيق
+                {page_subtitle_text}
             </p>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-# 3. أزرار وحقول رفع الملفات (دعم رفع ملفات متعددة)
+# 4. أزرار وحقول رفع الملفات
 col_file1, col_file2 = st.columns(2)
 with col_file1:
     uploaded_files = st.file_uploader(
-        "📂 اختر ملفات Word (.docx):",
+        "📂 " + ("اختر ملفات Word (.docx):" if is_arabic else "Sélectionner les fichiers Word (.docx):"),
         type=["docx"],
         accept_multiple_files=True,
-        help="يمكنك اختيار ملف واحد أو عدة ملفات دفعة واحدة.",
+        help="يمكنك اختيار ملف واحد أو عدة ملفات دفعة واحدة." if is_arabic else "Vous pouvez sélectionner un ou plusieurs fichiers à la fois.",
     )
 with col_file2:
     uploaded_logo = st.file_uploader(
-        "🖼️ رفع شعار المؤسسة (اختياري):",
+        "🖼️ " + ("رفع شعار المؤسسة (اختياري):" if is_arabic else "Logo de l'établissement (Optionnel):"),
         type=["jpg", "png", "jpeg"],
-        help="سيتم دمج الشعار المرفوع في ترويسة ملفات Word المنتَجة.",
+        help="سيتم دمج الشعار المرفوع في ترويسة ملفات Word المنتَجة." if is_arabic else "Le logo sera intégré dans les documents Word.",
     )
 
 st.markdown(
@@ -233,18 +249,10 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# اختيار لغة الترويسة
-lang = st.radio(
-    "لغة الترويسة / Langue de l'en-tête:",
-    ["العربية", "Français"],
-    horizontal=True,
-)
-is_arabic = lang == "العربية"
-
 # حساب الموسم الدراسي تلقائياً خلف الكواليس
 auto_school_year = get_auto_school_year()
 
-# 4. خانات المديرية والمؤسسة
+# 5. خانات المديرية والمؤسسة
 col_sch1, col_sch2 = st.columns(2)
 with col_sch1:
     direction_name = st.text_input(
@@ -261,7 +269,7 @@ with col_sch2:
         else "Lycée Qualifiant Oulad Daoud",
     )
 
-# 5. باقي خانات الإدخال الشخصية والدراسية
+# 6. باقي خانات الإدخال الشخصية والدراسية
 col1, col2 = st.columns(2)
 with col1:
     teacher_name = st.text_input(
@@ -292,37 +300,37 @@ with col2:
     else:
         class_level = selected_level
 
-st.subheader("⚙️ خيارات التنسيق والهوامش")
+st.subheader("⚙️ " + ("خيارات التنسيق والهوامش" if is_arabic else "Options de mise en page"))
 
 col_opt1, col_opt2 = st.columns(2)
 with col_opt1:
     show_all_pages = st.checkbox(
-        "إظهار الترويسة في جميع الصفحات",
+        "إظهار الترويسة في جميع الصفحات" if is_arabic else "Afficher l'en-tête sur toutes les pages",
         value=False,
-        help="عند عدم التفعيل (الافتراضي)، تظهر الترويسة في الصفحة الأولى فقط.",
+        help="عند عدم التفعيل (الافتراضي)، تظهر الترويسة في الصفحة الأولى فقط." if is_arabic else "Par défaut, l'en-tête apparaît uniquement sur la 1ère page.",
     )
 with col_opt2:
     add_footer = st.checkbox(
         "تذييل الصفحات / Pied de page",
         value=False,
-        help="تفعيل إظهار تذييل الصفحات لجميع صفحات الملف.",
+        help="تفعيل إظهار تذييل الصفحات لجميع صفحات الملف." if is_arabic else "Activer le pied de page sur toutes les pages.",
     )
 
 col_sp1, col_sp2 = st.columns(2)
 with col_sp1:
     header_space = st.slider(
-        "المسافة أسفل الترويسة (نقطة):",
+        "المسافة أسفل الترويسة (نقطة):" if is_arabic else "Espace sous l'en-tête (pt):",
         min_value=6,
         max_value=36,
         value=18,
         step=3,
-        help="اختر قيمة أصغر لتوفير المساحة عند الطباعة.",
+        help="اختر قيمة أصغر لتوفير المساحة عند الطباعة." if is_arabic else "Diminuer la valeur pour économiser de l'espace à l'impression.",
     )
 with col_sp2:
     border_color = st.color_picker(
-        "لون الخط الفاصل أسفل الترويسة:",
+        "لون الخط الفاصل أسفل الترويسة:" if is_arabic else "Couleur de la ligne de séparation:",
         value="#444444",
-        help="اختر لون الخط الفاصل بين الترويسة ومحتوى المستند.",
+        help="اختر لون الخط الفاصل بين الترويسة ومحتوى المستند." if is_arabic else "Couleur du trait sous l'en-tête.",
     )
 
 
@@ -526,11 +534,11 @@ def process_docx(
 
 
 # زر المعالجة والتوليد
-if uploaded_files and st.button("🚀 توليد الملفات المحدثة"):
+btn_label = "🚀 توليد الملفات المحدثة" if is_arabic else "🚀 Générer les fichiers mis à jour"
+if uploaded_files and st.button(btn_label):
     num_files = len(uploaded_files)
 
     if num_files == 1:
-        # معالجة ملف واحد
         single_file = uploaded_files[0]
         processed_file = process_docx(
             uploaded_file_obj=single_file,
@@ -547,15 +555,14 @@ if uploaded_files and st.button("🚀 توليد الملفات المحدثة")
             header_space=header_space,
             border_color_hex=border_color,
         )
-        st.success("تم تحديث الملف بنجاح!")
+        st.success("تم تحديث الملف بنجاح!" if is_arabic else "Le fichier a été mis à jour avec succès!")
         st.download_button(
-            label="📥 تحميل الملف الجاهز",
+            label="📥 " + ("تحميل الملف الجاهز" if is_arabic else "Télécharger le fichier"),
             data=processed_file,
             file_name=f"محدث_{single_file.name}",
             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         )
     else:
-        # معالجة عدة ملفات وضغطها في ملف ZIP
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
             for file_obj in uploaded_files:
@@ -579,9 +586,9 @@ if uploaded_files and st.button("🚀 توليد الملفات المحدثة")
                 )
 
         zip_buffer.seek(0)
-        st.success(f"تم تحديث {num_files} ملفات بنجاح!")
+        st.success(f"تم تحديث {num_files} ملفات بنجاح!" if is_arabic else f"{num_files} fichiers mis à jour avec succès!")
         st.download_button(
-            label="📥 تحميل جميع الملفات المحدثة (.zip)",
+            label="📥 " + ("تحميل جميع الملفات المحدثة (.zip)" if is_arabic else "Télécharger tous les fichiers (.zip)"),
             data=zip_buffer,
             file_name="الملفات_المحدثة.zip",
             mime="application/zip",
