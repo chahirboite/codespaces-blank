@@ -2,6 +2,7 @@ import base64
 import datetime
 import io
 import os
+import zipfile
 import docx
 import streamlit as st
 from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT, WD_TABLE_ALIGNMENT
@@ -196,17 +197,20 @@ with header_container:
         unsafe_allow_html=True,
     )
 
-# 3. أزرار وحقول رفع الملفات (تأتي أولاً)
+# 3. أزرار وحقول رفع الملفات (دعم رفع ملفات متعددة)
 col_file1, col_file2 = st.columns(2)
 with col_file1:
-    uploaded_file = st.file_uploader(
-        "📂 اختر ملف Word (.docx):", type=["docx"]
+    uploaded_files = st.file_uploader(
+        "📂 اختر ملفات Word (.docx):",
+        type=["docx"],
+        accept_multiple_files=True,
+        help="يمكنك اختيار ملف واحد أو عدة ملفات دفعة واحدة.",
     )
 with col_file2:
     uploaded_logo = st.file_uploader(
         "🖼️ رفع شعار المؤسسة (اختياري):",
         type=["jpg", "png", "jpeg"],
-        help="سيتم دمج الشعار المرفوع في ترويسة ملف Word المنتَج.",
+        help="سيتم دمج الشعار المرفوع في ترويسة ملفات Word المنتَجة.",
     )
 
 st.markdown(
@@ -240,7 +244,7 @@ is_arabic = lang == "العربية"
 # حساب الموسم الدراسي تلقائياً خلف الكواليس
 auto_school_year = get_auto_school_year()
 
-# 4. خانات المديرية والمؤسسة (مرتبة مباشرة بعد أزرار الرفع واللغة)
+# 4. خانات المديرية والمؤسسة
 col_sch1, col_sch2 = st.columns(2)
 with col_sch1:
     direction_name = st.text_input(
@@ -341,7 +345,6 @@ def process_docx(
     doc = docx.Document(io.BytesIO(file_bytes))
     logo_file = get_logo_bytes(uploaded_logo)
 
-    # التوليد التلقائي: في حالة تركها فارغة تُعتمد مديرية تاونات وثانوية أولاد داود التأهيلية
     d_name = (
         direction_val.strip()
         if direction_val.strip()
@@ -380,7 +383,6 @@ def process_docx(
             section.different_first_page_header_footer = False
             header = section.header
 
-        # بناء جدول الترويسة
         tbl = header.add_table(rows=1, cols=3, width=Inches(7.2))
         tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
         tblPr = tbl._tbl.tblPr
@@ -388,7 +390,6 @@ def process_docx(
         if is_arabic:
             tblPr.insert(0, OxmlElement("w:bidiVisual"))
 
-        # إضافة خط سفلي مخصص للترويسة
         tblBorders = OxmlElement("w:tblBorders")
         bottom_border = OxmlElement("w:bottom")
         bottom_border.set(qn("w:val"), "single")
@@ -414,7 +415,6 @@ def process_docx(
             left_text = f"Direction Provinciale: {d_name}\n{s_name}\nProfesseur: {t_name}"
             right_text = f"Matière: {subj}\nNiveau: {c_level}\nAnnée scolaire: {s_year}"
 
-        # العمود الأول
         cell_0 = row.cells[0]
         if is_arabic:
             set_cell_rtl(cell_0)
@@ -430,7 +430,6 @@ def process_docx(
             bold=True,
         )
 
-        # العمود الأوسط (الشعار)
         cell_1 = row.cells[1]
         if is_arabic:
             set_cell_rtl(cell_1)
@@ -444,7 +443,6 @@ def process_docx(
             except Exception:
                 pass
 
-        # العمود الثالث
         cell_2 = row.cells[2]
         if is_arabic:
             set_cell_rtl(cell_2)
@@ -460,14 +458,12 @@ def process_docx(
             bold=True,
         )
 
-        # مسافة فاصلة أسفل الترويسة
         p_space = header.add_paragraph()
         p_space.paragraph_format.space_before = Pt(0)
         p_space.paragraph_format.space_after = Pt(header_space)
 
         ensure_valid_header_xml(section)
 
-        # --- معالجة تذييل الصفحات (Pied de page) ---
         if add_footer:
             footers_to_process = [section.footer]
             if section.different_first_page_header_footer:
@@ -529,31 +525,69 @@ def process_docx(
     return output
 
 
-if uploaded_file and st.button("🚀 توليد الملف المحدث"):
-    processed_file = process_docx(
-        uploaded_file_obj=uploaded_file,
-        direction_val=direction_name,
-        school_val=school_name,
-        teacher_name_val=teacher_name,
-        subject_val=subject,
-        class_level_val=class_level,
-        school_year_val=auto_school_year,
-        show_all_pages=show_all_pages,
-        add_footer=add_footer,
-        is_arabic=is_arabic,
-        uploaded_logo=uploaded_logo,
-        header_space=header_space,
-        border_color_hex=border_color,
-    )
-    st.success("تم تحديث الملف بنجاح!")
-    st.download_button(
-        label="📥 تحميل الملف الجاهز",
-        data=processed_file,
-        file_name=f"محدث_{uploaded_file.name}",
-        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    )
+# زر المعالجة والتوليد
+if uploaded_files and st.button("🚀 توليد الملفات المحدثة"):
+    num_files = len(uploaded_files)
 
-# --- تذييل الصفحة وتوقيع المطور (حقوق التأليف) ---
+    if num_files == 1:
+        # معالجة ملف واحد
+        single_file = uploaded_files[0]
+        processed_file = process_docx(
+            uploaded_file_obj=single_file,
+            direction_val=direction_name,
+            school_val=school_name,
+            teacher_name_val=teacher_name,
+            subject_val=subject,
+            class_level_val=class_level,
+            school_year_val=auto_school_year,
+            show_all_pages=show_all_pages,
+            add_footer=add_footer,
+            is_arabic=is_arabic,
+            uploaded_logo=uploaded_logo,
+            header_space=header_space,
+            border_color_hex=border_color,
+        )
+        st.success("تم تحديث الملف بنجاح!")
+        st.download_button(
+            label="📥 تحميل الملف الجاهز",
+            data=processed_file,
+            file_name=f"محدث_{single_file.name}",
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
+    else:
+        # معالجة عدة ملفات وضغطها في ملف ZIP
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+            for file_obj in uploaded_files:
+                processed_data = process_docx(
+                    uploaded_file_obj=file_obj,
+                    direction_val=direction_name,
+                    school_val=school_name,
+                    teacher_name_val=teacher_name,
+                    subject_val=subject,
+                    class_level_val=class_level,
+                    school_year_val=auto_school_year,
+                    show_all_pages=show_all_pages,
+                    add_footer=add_footer,
+                    is_arabic=is_arabic,
+                    uploaded_logo=uploaded_logo,
+                    header_space=header_space,
+                    border_color_hex=border_color,
+                )
+                zip_file.writestr(
+                    f"محدث_{file_obj.name}", processed_data.getvalue()
+                )
+
+        zip_buffer.seek(0)
+        st.success(f"تم تحديث {num_files} ملفات بنجاح!")
+        st.download_button(
+            label="📥 تحميل جميع الملفات المحدثة (.zip)",
+            data=zip_buffer,
+            file_name="الملفات_المحدثة.zip",
+            mime="application/zip",
+        )
+
+# --- تذييل الصفحة وتوقيع المطور ---
 st.markdown(
     """
     <hr style="margin-top: 50px; margin-bottom: 15px; border: 0; border-top: 1px solid #e0e0e0;">
