@@ -181,7 +181,16 @@ else:
         "Fusion et mise à jour automatique et élégante des en-têtes et pieds de page"
     )
 
-# 3. بناء خلفية العنوان الثابتة والعنوان الديناميكي
+# تحضير أنيميشن الانبثاق كلمة كلمة للوصف
+words = page_subtitle_text.split()
+animated_subtitle_html = "".join(
+    [
+        f'<span class="animated-word" style="animation-delay: {i * 0.08:.2f}s;">{word}</span> '
+        for i, word in enumerate(words)
+    ]
+)
+
+# 3. بناء خلفية العنوان الثابتة والعنوان المتناسق مع الشاشات
 header_container = st.container()
 static_logo_uri = get_static_logo_data_uri()
 bg_style = ""
@@ -191,9 +200,37 @@ if static_logo_uri:
 with header_container:
     st.markdown(
         f"""
+        <style>
+        @keyframes wordPop {{
+            0% {{
+                opacity: 0;
+                transform: translateY(10px) scale(0.92);
+            }}
+            100% {{
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }}
+        }}
+        .animated-word {{
+            display: inline-block;
+            opacity: 0;
+            animation: wordPop 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            margin: 0 2px;
+        }}
+        .responsive-title {{
+            color: #1e293b;
+            margin: 0;
+            font-size: clamp(1.35rem, 4.5vw, 1.85rem);
+            font-weight: 800;
+            font-family: 'Segoe UI', Tahoma, Geneva, sans-serif;
+            line-height: 1.3;
+            word-break: keep-all;
+            overflow-wrap: break-word;
+        }}
+        </style>
         <div style="
             position: relative;
-            padding: 30px 20px;
+            padding: 26px 16px;
             border-radius: 14px;
             text-align: center;
             margin-bottom: 25px;
@@ -202,11 +239,11 @@ with header_container:
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.04);
             {bg_style}
         ">
-            <h1 style="color: #1e293b; margin: 0; font-size: 2.1rem; font-weight: 800; font-family: 'Segoe UI', Tahoma, Geneva, sans-serif;">
+            <h1 class="responsive-title">
                 {page_title_text}
             </h1>
-            <p style="color: #1e293b; margin-top: 8px; margin-bottom: 0; font-size: 1.05rem; font-weight: 700;">
-                {page_subtitle_text}
+            <p style="color: #1e293b; margin-top: 10px; margin-bottom: 0; font-size: clamp(0.9rem, 3.2vw, 1.05rem); font-weight: 700; line-height: 1.5;">
+                {animated_subtitle_html}
             </p>
         </div>
         """,
