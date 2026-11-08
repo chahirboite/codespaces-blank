@@ -116,7 +116,6 @@ def add_styled_run(
         if rPr.find(qn("w:rtl")) is None:
             rPr.append(OxmlElement("w:rtl"))
     else:
-        paragraph.paragraph_format.bidi = False
         run = paragraph.add_run(text)
         run.font.name = "Arial"
         run.font.size = Pt(font_size)
@@ -506,26 +505,28 @@ def process_docx(
 
         ensure_valid_header_xml(section)
 
-        # --- معالجة التذييل بدون استخدام جداول نهائياً (باستخدام Tab Stop) ---
+        # --- معالجة التذييل بتقريب العناصر ومنع الانكسار ---
         if add_footer:
             footers_to_process = [section.footer]
             if section.different_first_page_header_footer:
                 footers_to_process.append(section.first_page_footer)
 
             for footer_target in footers_to_process:
-                # مسح كامل المحتويات والجداول القديمة
                 for p in list(footer_target.paragraphs):
                     p._p.getparent().remove(p._p)
                 for t in list(footer_target.tables):
                     t._tbl.getparent().remove(t._tbl)
 
-                # إضافة فقرة واحدة ناصعة في التذييل
                 p_foot = footer_target.add_paragraph()
                 p_foot.paragraph_format.space_before = Pt(0)
                 p_foot.paragraph_format.space_after = Pt(0)
 
-                # تحديد موقع التبويب عند أقصى هامش الصفحة (6.8 بوصة)
-                tab_position = Inches(6.8)
+                # إزاحة النصوص نحو الداخل بمقدار 0.8 بوصة لتقريب العناصر وتفادي الحواف
+                p_foot.paragraph_format.left_indent = Inches(0.8)
+                p_foot.paragraph_format.right_indent = Inches(0.8)
+
+                # موقع التبويب المناسب داخل الهوامش المعدلة
+                tab_position = Inches(5.0)
 
                 if is_arabic:
                     p_foot.alignment = WD_ALIGN_PARAGRAPH.RIGHT
@@ -533,12 +534,14 @@ def process_docx(
                         tab_position, WD_TAB_ALIGNMENT.LEFT
                     )
 
+                    # اسم الأستاذ (عربي)
                     add_styled_run(
                         p_foot, t_name, is_arabic=True, font_size=10, bold=False
                     )
                     p_foot.add_run("\t")
+                    # الموسم الدراسي (أرقام LTR لمنع انكسار -2026 / 2027)
                     add_styled_run(
-                        p_foot, s_year, is_arabic=True, font_size=10, bold=False
+                        p_foot, s_year, is_arabic=False, font_size=10, bold=False
                     )
                 else:
                     p_foot.alignment = WD_ALIGN_PARAGRAPH.LEFT
