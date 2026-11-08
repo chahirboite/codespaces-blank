@@ -171,26 +171,24 @@ lang = st.radio(
 )
 is_arabic = lang == "العربية"
 
-# 2. تحديد العنوان والوصف الديناميكيين بحسب اللغة
+# 2. تحديد العنوان والوصف التفصيلي (الاقتراح الثاني)
 if is_arabic:
-    page_title_text = "📝 الترويسة المدرسية الذكية"
-    page_subtitle_text = "دمج وتحديث ترويسة وتذييل الملفات التعليمية تلقائياً وبشكل أنيق"
+    page_title_html = "📝 الترويسة المدرسية<br><span style='font-size: 0.92em;'>الذكية</span>"
+    page_subtitle_text = "حل سريع وأنيق لتخصيص وتوحيد الترويسات المدرسية وشعارات المؤسسات على جميع ملفات Word (.docx) التعليمية."
 else:
-    page_title_text = "📝 Générateur d'En-tête Scolaire"
-    page_subtitle_text = (
-        "Fusion et mise à jour automatique et élégante des en-têtes et pieds de page"
-    )
+    page_title_html = "📝 Générateur d'En-tête<br><span style='font-size: 0.92em;'>Scolaire</span>"
+    page_subtitle_text = "Solution rapide et élégante pour personnaliser, automatiser et uniformiser les en-têtes et pieds de page de vos fichiers Word (.docx) pédagogiques."
 
 # تحضير أنيميشن الانبثاق كلمة كلمة للوصف
 words = page_subtitle_text.split()
 animated_subtitle_html = "".join(
     [
-        f'<span class="animated-word" style="animation-delay: {i * 0.08:.2f}s;">{word}</span> '
+        f'<span class="animated-word" style="animation-delay: {i * 0.05:.2f}s;">{word}</span> '
         for i, word in enumerate(words)
     ]
 )
 
-# 3. بناء خلفية العنوان الثابتة والعنوان المتناسق مع الشاشات
+# 3. بناء خلفية العنوان الثابتة والترتيب التماثلي للعنوان والوصف
 header_container = st.container()
 static_logo_uri = get_static_logo_data_uri()
 bg_style = ""
@@ -204,7 +202,7 @@ with header_container:
         @keyframes wordPop {{
             0% {{
                 opacity: 0;
-                transform: translateY(10px) scale(0.92);
+                transform: translateY(8px) scale(0.95);
             }}
             100% {{
                 opacity: 1;
@@ -214,23 +212,22 @@ with header_container:
         .animated-word {{
             display: inline-block;
             opacity: 0;
-            animation: wordPop 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            animation: wordPop 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
             margin: 0 2px;
         }}
         .responsive-title {{
             color: #1e293b;
             margin: 0;
-            font-size: clamp(1.35rem, 4.5vw, 1.85rem);
+            font-size: clamp(1.25rem, 4.2vw, 1.65rem);
             font-weight: 800;
             font-family: 'Segoe UI', Tahoma, Geneva, sans-serif;
-            line-height: 1.3;
-            word-break: keep-all;
-            overflow-wrap: break-word;
+            line-height: 1.25;
+            text-align: center;
         }}
         </style>
         <div style="
             position: relative;
-            padding: 26px 16px;
+            padding: 24px 16px;
             border-radius: 14px;
             text-align: center;
             margin-bottom: 25px;
@@ -240,9 +237,9 @@ with header_container:
             {bg_style}
         ">
             <h1 class="responsive-title">
-                {page_title_text}
+                {page_title_html}
             </h1>
-            <p style="color: #1e293b; margin-top: 10px; margin-bottom: 0; font-size: clamp(0.9rem, 3.2vw, 1.05rem); font-weight: 700; line-height: 1.5;">
+            <p style="color: #1e293b; margin-top: 12px; margin-bottom: 0; font-size: clamp(0.85rem, 2.9vw, 0.98rem); font-weight: 600; line-height: 1.55; max-width: 650px; margin-left: auto; margin-right: auto;">
                 {animated_subtitle_html}
             </p>
         </div>
