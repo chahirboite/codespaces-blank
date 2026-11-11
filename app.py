@@ -311,7 +311,7 @@ st.markdown(
         background-color: #ffffff;
         border: 1px solid #cbd5e1;
         border-radius: 8px;
-        padding: 30px;
+        padding: 20px 16px;
         box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
         direction: rtl;
         text-align: right;
@@ -319,6 +319,9 @@ st.markdown(
         color: #1e293b;
         margin-top: 15px;
         margin-bottom: 25px;
+        box-sizing: border-box;
+        width: 100%;
+        overflow: hidden;
     }
     </style>
     """,
@@ -610,8 +613,8 @@ def generate_report_docx(
     clear_and_prepare_headers(section)
     header = section.header
 
-    # جدول الترويسة بعرض موسع وشعار بارز في المنتصف
-    tbl = header.add_table(rows=1, cols=3, width=Inches(6.8))
+    # جدول الترويسة الهيكلي بابعاد دقيقة
+    tbl = header.add_table(rows=1, cols=3, width=Inches(6.7))
     tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
     tblPr = tbl._tbl.tblPr
     tblPr.insert(0, OxmlElement("w:bidiVisual"))
@@ -626,7 +629,7 @@ def generate_report_docx(
     tblPr.append(tblBorders)
 
     row = tbl.rows[0]
-    col_widths = [Inches(2.9), Inches(1.4), Inches(2.9)]
+    col_widths = [Inches(2.7), Inches(1.3), Inches(2.7)]
     for i, cell in enumerate(row.cells):
         cell.width = col_widths[i]
         cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
@@ -642,7 +645,7 @@ def generate_report_docx(
     add_header_line_to_cell(cell_r, f"المديرية الإقليمية: {d_name}", is_arabic=True, align=WD_ALIGN_PARAGRAPH.RIGHT, is_first=True)
     add_header_line_to_cell(cell_r, s_name, is_arabic=True, align=WD_ALIGN_PARAGRAPH.RIGHT, is_first=False)
 
-    # الخلية الوسطى: تكبير اللوغو ليبرز أكثر
+    # الخلية الوسطى: الشعار
     cell_c = row.cells[1]
     set_cell_rtl(cell_c)
     p_c = cell_c.paragraphs[0]
@@ -651,7 +654,7 @@ def generate_report_docx(
         try:
             if isinstance(logo_file, io.BytesIO):
                 logo_file.seek(0)
-            p_c.add_run().add_picture(logo_file, width=Inches(1.4))
+            p_c.add_run().add_picture(logo_file, width=Inches(1.1))
         except Exception:
             pass
 
@@ -750,9 +753,9 @@ def render_live_preview_html(
     subject_val, date_val, time_val, room_val, report_title, situations_list,
     custom_notes, action_val, uploaded_logo_obj
 ):
-    """توليد المعاينة الحية التفاعلية بدون أسطر فارغة أو فراغات بادئة لتفادي خطأ الكود المعيب"""
+    """توليد المعاينة الحية التفاعلية مع شبكة CSS Grid وخطوط تكيفية ذكية"""
     logo_src = get_logo_base64_src(uploaded_logo_obj)
-    logo_html = f'<img src="{logo_src}" style="max-height: 75px; width: auto;" />' if logo_src else ''
+    logo_html = f'<img src="{logo_src}" style="max-height: 48px; max-width: 90px; height: auto; width: auto; object-fit: contain;" />' if logo_src else ''
 
     d_name = direction_val.strip() if direction_val.strip() else "تاونات"
     s_name = school_val.strip() if school_val.strip() else "ثانوية أولاد داود التأهيلية"
@@ -767,42 +770,41 @@ def render_live_preview_html(
     bullets_html = "".join([f"<li style='margin-bottom: 4px;'>{s}</li>" for s in situations_list])
     custom_html = f"<p style='margin-top: 6px; font-weight: 500;'><b>ملاحظات إضافية:</b> {custom_notes.strip()}</p>" if custom_notes.strip() else ""
 
-    # كود HTML خالي تماماً من الفراغات البادئة (Indentations) لمنع تفسيره كـ Markdown Code Block
-    html = f"""<div class="paper-preview">
-<div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #334155; padding-bottom: 10px; margin-bottom: 15px;">
-<div style="text-align: right; width: 38%; white-space: nowrap;">
-<div style="font-weight: bold; font-size: 0.85rem;">المديرية الإقليمية: {d_name}</div>
-<div style="font-weight: bold; font-size: 0.85rem;">{s_name}</div>
+    html = f"""<div class="paper-preview" style="box-sizing: border-box; width: 100%; max-width: 100%; overflow: hidden; padding: 18px 14px;">
+<div style="display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 6px; border-bottom: 2px solid #334155; padding-bottom: 8px; margin-bottom: 15px;">
+<div style="text-align: right; font-size: clamp(0.68rem, 2.4vw, 0.85rem); line-height: 1.35; font-weight: bold; overflow: hidden;">
+<div>المديرية الإقليمية: {d_name}</div>
+<div>{s_name}</div>
 </div>
-<div style="text-align: center; width: 24%;">
+<div style="text-align: center; display: flex; justify-content: center; align-items: center; padding: 0 2px;">
 {logo_html}
 </div>
-<div style="text-align: left; width: 38%; white-space: nowrap;">
-<div style="font-weight: bold; font-size: 0.85rem;">الموسم الدراسي: {year_val}</div>
-<div style="font-weight: bold; font-size: 0.85rem;">الأستاذ(ة): {t_name}</div>
+<div style="text-align: left; font-size: clamp(0.68rem, 2.4vw, 0.85rem); line-height: 1.35; font-weight: bold; overflow: hidden;">
+<div>الموسم الدراسي: {year_val}</div>
+<div>الأستاذ(ة): {t_name}</div>
 </div>
 </div>
-<div style="text-align: center; margin: 18px 0;">
-<h3 style="margin: 0; font-size: 1.15rem; text-decoration: underline; color: #0f172a;">📋 {report_title}</h3>
+<div style="text-align: center; margin: 16px 0;">
+<h3 style="margin: 0; font-size: clamp(0.95rem, 3.2vw, 1.15rem); text-decoration: underline; color: #0f172a;">📋 {report_title}</h3>
 </div>
-<p style="line-height: 1.7; font-size: 0.95rem; margin-bottom: 12px;">
+<p style="line-height: 1.7; font-size: clamp(0.85rem, 2.8vw, 0.95rem); margin-bottom: 12px; word-break: break-word;">
 سلام تام بوجود مولانا الإمام، وبعد؛<br><br>
 يشرفني أن أرفع إلى علم السيد مدير المؤسسة هذا التقرير المتعلق بالسلوك الصادر عن التلميذ(ة): 
 <b>« {student_str} »</b>، المتمدرس(ة) بالقسم: <b>« {class_str} »</b>، وذلك خلال حصة مادة <b>« {subject_val} »</b> 
 بتاريخ: <b>{date_str}</b> (التوقيت: {time_str} / {room_str}).
 </p>
-<div style="font-weight: bold; font-size: 0.95rem; margin-top: 10px; margin-bottom: 6px;">وقائع وتفاصيل المخالفة الملاحظة:</div>
-<ul style="padding-right: 20px; font-size: 0.9rem; line-height: 1.6; margin-top: 4px; margin-bottom: 10px;">
+<div style="font-weight: bold; font-size: clamp(0.85rem, 2.8vw, 0.95rem); margin-top: 10px; margin-bottom: 6px;">وقائع وتفاصيل المخالفة الملاحظة:</div>
+<ul style="padding-right: 20px; font-size: clamp(0.8rem, 2.6vw, 0.9rem); line-height: 1.6; margin-top: 4px; margin-bottom: 10px;">
 {bullets_html}
 </ul>
 {custom_html}
-<p style="line-height: 1.7; font-size: 0.95rem; margin-top: 14px; margin-bottom: 25px;">
+<p style="line-height: 1.7; font-size: clamp(0.85rem, 2.8vw, 0.95rem); margin-top: 14px; margin-bottom: 25px; word-break: break-word;">
 ونظراً لما يقتضيه النظام الداخلي للمؤسسة وضماناً للسير العادي والدراسي للحصص، أقترح عليكم: <b>{action_val}</b>.<br><br>
 وتقبلوا فائق التقدير والاحترام.
 </p>
-<div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 30px; border-top: 1px dashed #cbd5e1; padding-top: 12px; font-size: 0.85rem; font-weight: bold;">
+<div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 25px; border-top: 1px dashed #cbd5e1; padding-top: 12px; font-size: clamp(0.7rem, 2.4vw, 0.85rem); font-weight: bold;">
 <div>توقيع الأستاذ(ة)</div>
-<div style="font-weight: normal; font-size: 0.8rem;">حرر بـ تاونات في: {date_str}</div>
+<div style="font-weight: normal; font-size: clamp(0.65rem, 2.2vw, 0.8rem);">حرر بـ تاونات في: {date_str}</div>
 <div>رأي وتوقيع الإدارة التربوية</div>
 </div>
 </div>"""
