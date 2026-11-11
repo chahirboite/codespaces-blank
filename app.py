@@ -156,7 +156,7 @@ def add_header_line_to_cell(cell, text, is_arabic, align, is_first=False):
     elif length > 30:
         font_size = 8.2
     elif length > 22:
-        font_size = 9.0
+        font_size = 8.8
     else:
         font_size = 10.0
 
@@ -311,7 +311,7 @@ st.markdown(
         background-color: #ffffff;
         border: 1px solid #cbd5e1;
         border-radius: 8px;
-        padding: 20px 16px;
+        padding: 20px 14px;
         box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
         direction: rtl;
         text-align: right;
@@ -613,7 +613,7 @@ def generate_report_docx(
     clear_and_prepare_headers(section)
     header = section.header
 
-    # جدول الترويسة الهيكلي بابعاد دقيقة
+    # جدول الترويسة الهيكلي بأبعاد دقيقة وتراصف منع الرجوع للسطر
     tbl = header.add_table(rows=1, cols=3, width=Inches(6.7))
     tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
     tblPr = tbl._tbl.tblPr
@@ -668,6 +668,7 @@ def generate_report_docx(
     p_space.paragraph_format.space_before = Pt(0)
     p_space.paragraph_format.space_after = Pt(6)
 
+    # عنوان التقرير
     p_title = doc.add_paragraph()
     p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p_title.paragraph_format.space_before = Pt(12)
@@ -675,6 +676,7 @@ def generate_report_docx(
     r_title = add_styled_run(p_title, f"📋 {report_title}", is_arabic=True, font_size=15, bold=True)
     r_title.font.underline = True
 
+    # ديباجة التقرير
     p_body1 = doc.add_paragraph()
     p_body1.paragraph_format.space_before = Pt(4)
     p_body1.paragraph_format.space_after = Pt(6)
@@ -694,6 +696,7 @@ def generate_report_docx(
     )
     add_styled_run(p_body1, intro_text, is_arabic=True, font_size=12, bold=False)
 
+    # تفاصيل الوقائع
     p_situations_head = doc.add_paragraph()
     p_situations_head.paragraph_format.space_before = Pt(8)
     p_situations_head.paragraph_format.space_after = Pt(4)
@@ -712,6 +715,7 @@ def generate_report_docx(
         p_custom.paragraph_format.space_after = Pt(4)
         add_styled_run(p_custom, f"ملاحظات إضافية: {custom_notes.strip()}", is_arabic=True, font_size=11.5, bold=False)
 
+    # الإجراء والخاتمة
     p_action = doc.add_paragraph()
     p_action.paragraph_format.space_before = Pt(10)
     p_action.paragraph_format.space_after = Pt(12)
@@ -723,24 +727,48 @@ def generate_report_docx(
     )
     add_styled_run(p_action, action_text, is_arabic=True, font_size=12, bold=False)
 
+    # 1. التواقيع داخل جسم الصفحة (Document Body)
+    sig_tbl = doc.add_table(rows=1, cols=2, width=Inches(6.7))
+    sig_tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
+    sig_tblPr = sig_tbl._tbl.tblPr
+    sig_tblPr.insert(0, OxmlElement("w:bidiVisual"))
+
+    sigBorders = OxmlElement("w:tblBorders")
+    for b_name in ["top", "left", "bottom", "right", "insideH", "insideV"]:
+        b = OxmlElement(f"w:{b_name}")
+        b.set(qn("w:val"), "none")
+        sigBorders.append(b)
+    sig_tblPr.append(sigBorders)
+
+    cell_sig_r = sig_tbl.rows[0].cells[0]
+    set_cell_rtl(cell_sig_r)
+    p_sig_r = cell_sig_r.paragraphs[0]
+    p_sig_r.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    add_styled_run(p_sig_r, "توقيع الأستاذ(ة):", is_arabic=True, font_size=11, bold=True)
+
+    cell_sig_l = sig_tbl.rows[0].cells[1]
+    set_cell_rtl(cell_sig_l)
+    p_sig_l = cell_sig_l.paragraphs[0]
+    p_sig_l.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    add_styled_run(p_sig_l, "رأي وتوقيع الإدارة التربوية:", is_arabic=True, font_size=11, bold=True)
+
+    # 2. تذييل الصفحات الرسمي (Pied de page): اسم الأستاذ والتاريخ فقط
     clear_all_footers_completely(section)
     footer = section.footer
     p_foot = footer.add_paragraph()
     p_foot.paragraph_format.space_before = Pt(0)
     p_foot.paragraph_format.space_after = Pt(0)
 
-    center_pos = int(Inches(3.4))
-    right_pos = int(Inches(6.8))
+    center_pos = int(Inches(3.35))
+    right_pos = int(Inches(6.7))
 
     p_foot.paragraph_format.tab_stops.add_tab_stop(center_pos, WD_TAB_ALIGNMENT.CENTER)
     p_foot.paragraph_format.tab_stops.add_tab_stop(right_pos, WD_TAB_ALIGNMENT.LEFT)
     p_foot.alignment = WD_ALIGN_PARAGRAPH.RIGHT
 
-    add_styled_run(p_foot, "توقيع الأستاذ(ة)", is_arabic=True, font_size=10.5, bold=True)
-    p_foot.add_run("\t")
-    add_styled_run(p_foot, f"حرر بـ تاونات في: {date_str}", is_arabic=True, font_size=10, bold=False)
-    p_foot.add_run("\t")
-    add_styled_run(p_foot, "رأي وتوقيع الإدارة التربوية", is_arabic=True, font_size=10.5, bold=True)
+    add_styled_run(p_foot, f"الأستاذ(ة): {t_name}", is_arabic=True, font_size=9.5, bold=False)
+    p_foot.add_run("\t\t")
+    add_styled_run(p_foot, f"حرر في: {date_str}", is_arabic=True, font_size=9.5, bold=False)
 
     output = io.BytesIO()
     doc.save(output)
@@ -753,7 +781,7 @@ def render_live_preview_html(
     subject_val, date_val, time_val, room_val, report_title, situations_list,
     custom_notes, action_val, uploaded_logo_obj
 ):
-    """توليد المعاينة الحية التفاعلية مع شبكة CSS Grid وخطوط تكيفية ذكية"""
+    """توليد المعاينة الحية التفاعلية مع منع انكسار أرقام الموسم الدراسي ونقل التواقيع لجسم الصفحة"""
     logo_src = get_logo_base64_src(uploaded_logo_obj)
     logo_html = f'<img src="{logo_src}" style="max-height: 48px; max-width: 90px; height: auto; width: auto; object-fit: contain;" />' if logo_src else ''
 
@@ -771,17 +799,17 @@ def render_live_preview_html(
     custom_html = f"<p style='margin-top: 6px; font-weight: 500;'><b>ملاحظات إضافية:</b> {custom_notes.strip()}</p>" if custom_notes.strip() else ""
 
     html = f"""<div class="paper-preview" style="box-sizing: border-box; width: 100%; max-width: 100%; overflow: hidden; padding: 18px 14px;">
-<div style="display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 6px; border-bottom: 2px solid #334155; padding-bottom: 8px; margin-bottom: 15px;">
-<div style="text-align: right; font-size: clamp(0.68rem, 2.4vw, 0.85rem); line-height: 1.35; font-weight: bold; overflow: hidden;">
-<div>المديرية الإقليمية: {d_name}</div>
-<div>{s_name}</div>
+<div style="display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 4px; border-bottom: 2px solid #334155; padding-bottom: 8px; margin-bottom: 15px;">
+<div style="text-align: right; font-size: clamp(0.60rem, 2.0vw, 0.82rem); line-height: 1.4; font-weight: bold; overflow: hidden;">
+<div style="white-space: nowrap;">المديرية الإقليمية: {d_name}</div>
+<div style="white-space: nowrap;">{s_name}</div>
 </div>
 <div style="text-align: center; display: flex; justify-content: center; align-items: center; padding: 0 2px;">
 {logo_html}
 </div>
-<div style="text-align: left; font-size: clamp(0.68rem, 2.4vw, 0.85rem); line-height: 1.35; font-weight: bold; overflow: hidden;">
-<div>الموسم الدراسي: {year_val}</div>
-<div>الأستاذ(ة): {t_name}</div>
+<div style="text-align: left; font-size: clamp(0.60rem, 2.0vw, 0.82rem); line-height: 1.4; font-weight: bold; overflow: hidden;">
+<div style="white-space: nowrap;">الموسم الدراسي: <span style="display: inline-block; direction: ltr; unicode-bidi: embed; white-space: nowrap;">{year_val}</span></div>
+<div style="white-space: nowrap;">الأستاذ(ة): {t_name}</div>
 </div>
 </div>
 <div style="text-align: center; margin: 16px 0;">
@@ -802,10 +830,15 @@ def render_live_preview_html(
 ونظراً لما يقتضيه النظام الداخلي للمؤسسة وضماناً للسير العادي والدراسي للحصص، أقترح عليكم: <b>{action_val}</b>.<br><br>
 وتقبلوا فائق التقدير والاحترام.
 </p>
-<div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 25px; border-top: 1px dashed #cbd5e1; padding-top: 12px; font-size: clamp(0.7rem, 2.4vw, 0.85rem); font-weight: bold;">
+<!-- التواقيع داخل جسم الصفحة -->
+<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-top: 30px; padding-top: 10px; font-size: clamp(0.75rem, 2.5vw, 0.9rem); font-weight: bold;">
 <div>توقيع الأستاذ(ة)</div>
-<div style="font-weight: normal; font-size: clamp(0.65rem, 2.2vw, 0.8rem);">حرر بـ تاونات في: {date_str}</div>
 <div>رأي وتوقيع الإدارة التربوية</div>
+</div>
+<!-- تذييل الصفحة الرسمي (اسم الأستاذ والتاريخ فقط) -->
+<div style="display: flex; justify-content: space-between; align-items: center; margin-top: 25px; border-top: 1px dashed #cbd5e1; padding-top: 8px; font-size: clamp(0.65rem, 2.2vw, 0.78rem); color: #64748b;">
+<div>الأستاذ(ة): {t_name}</div>
+<div>حرر في: {date_str}</div>
 </div>
 </div>"""
     return html
@@ -845,12 +878,13 @@ def render_report_tool():
     with col_s3:
         subject_name = st.text_input("المادة الدراسية:", value="الرياضيات")
 
-    col_t1, col_t2, col_t3 = st.columns(3)
+    # احتساب التاريخ أوتوماتيكياً بدون حقل إدخال يدوي
+    incident_date = datetime.date.today()
+
+    col_t1, col_t2 = st.columns(2)
     with col_t1:
-        incident_date = st.date_input("تاريخ الواقعة:", value=datetime.date.today())
-    with col_t2:
         incident_time = st.text_input("توقيت الحصة:", placeholder="مثال: من 10:00 إلى 11:00")
-    with col_t3:
+    with col_t2:
         room_number = st.text_input("رقم القاعة / المختبر:", value="القاعة 4")
 
     st.subheader("3️⃣ تحديد نوع التقرير والمخالفات")
