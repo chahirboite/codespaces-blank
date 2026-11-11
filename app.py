@@ -11,19 +11,6 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Inches, Pt
 
-# مكتبات دعم توليد PDF واللغة العربية (ReportLab + Arabic Reshaper)
-try:
-    import arabic_reshaper
-    from bidi.algorithm import get_display
-    from reportlab.lib.pagesizes import A4
-    from reportlab.lib import colors
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.pdfgen import canvas
-    HAS_PDF_LIBS = True
-except ImportError:
-    HAS_PDF_LIBS = False
-
 
 # ==========================================
 # 1. الدوال المساعدة المشتركة (Utility Functions)
@@ -290,7 +277,7 @@ with st.sidebar:
         """
         * 🚀 **أتمتة كاملة:** توفير الوقت والجهد في الهيكلة والتنسيق.
         * 👁️ **معاينة حية:** مشاهدة تفاعلية للمستند أثناء الكتابة.
-        * 📄 **تصدير مزدوج:** تنزيل المستندات بصيغتي Word (`.docx`) و PDF (`.pdf`).
+        * 📄 **تصدير محرر:** ملفات جاهزة للطباعة والتعديل بصيغة Word (`.docx`).
         """
     )
 
@@ -623,6 +610,7 @@ def generate_report_docx(
     clear_and_prepare_headers(section)
     header = section.header
 
+    # جدول الترويسة بعرض موسع وشعار بارز في المنتصف
     tbl = header.add_table(rows=1, cols=3, width=Inches(6.8))
     tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
     tblPr = tbl._tbl.tblPr
@@ -638,17 +626,23 @@ def generate_report_docx(
     tblPr.append(tblBorders)
 
     row = tbl.rows[0]
-    col_widths = [Inches(2.8), Inches(1.2), Inches(2.8)]
+    col_widths = [Inches(2.9), Inches(1.4), Inches(2.9)]
     for i, cell in enumerate(row.cells):
         cell.width = col_widths[i]
         cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
         set_cell_no_wrap(cell)
 
+    d_name = direction_val.strip() if direction_val.strip() else "تاونات"
+    s_name = school_val.strip() if school_val.strip() else "ثانوية أولاد داود التأهيلية"
+    t_name = teacher_val.strip() if teacher_val.strip() else "عثمان شهير"
+
+    # الخلية اليمنى: المديرية والمؤسسة
     cell_r = row.cells[0]
     set_cell_rtl(cell_r)
-    add_header_line_to_cell(cell_r, f"المديرية الإقليمية: {direction_val}", is_arabic=True, align=WD_ALIGN_PARAGRAPH.RIGHT, is_first=True)
-    add_header_line_to_cell(cell_r, school_val, is_arabic=True, align=WD_ALIGN_PARAGRAPH.RIGHT, is_first=False)
+    add_header_line_to_cell(cell_r, f"المديرية الإقليمية: {d_name}", is_arabic=True, align=WD_ALIGN_PARAGRAPH.RIGHT, is_first=True)
+    add_header_line_to_cell(cell_r, s_name, is_arabic=True, align=WD_ALIGN_PARAGRAPH.RIGHT, is_first=False)
 
+    # الخلية الوسطى: تكبير اللوغو ليبرز أكثر
     cell_c = row.cells[1]
     set_cell_rtl(cell_c)
     p_c = cell_c.paragraphs[0]
@@ -657,14 +651,15 @@ def generate_report_docx(
         try:
             if isinstance(logo_file, io.BytesIO):
                 logo_file.seek(0)
-            p_c.add_run().add_picture(logo_file, width=Inches(1.1))
+            p_c.add_run().add_picture(logo_file, width=Inches(1.4))
         except Exception:
             pass
 
+    # الخلية اليسرى: الموسم والأستاذ
     cell_l = row.cells[2]
     set_cell_rtl(cell_l)
     add_header_line_to_cell(cell_l, f"الموسم الدراسي: {year_val}", is_arabic=True, align=WD_ALIGN_PARAGRAPH.LEFT, is_first=True)
-    add_header_line_to_cell(cell_l, f"الأستاذ(ة): {teacher_val}", is_arabic=True, align=WD_ALIGN_PARAGRAPH.LEFT, is_first=False)
+    add_header_line_to_cell(cell_l, f"الأستاذ(ة): {t_name}", is_arabic=True, align=WD_ALIGN_PARAGRAPH.LEFT, is_first=False)
 
     p_space = header.add_paragraph()
     p_space.paragraph_format.space_before = Pt(0)
@@ -755,9 +750,13 @@ def render_live_preview_html(
     subject_val, date_val, time_val, room_val, report_title, situations_list,
     custom_notes, action_val, uploaded_logo_obj
 ):
-    """توليد المعاينة الحية التفاعلية بصيغة HTML/CSS ورقية"""
+    """توليد المعاينة الحية التفاعلية بدون أسطر فارغة أو فراغات بادئة لتفادي خطأ الكود المعيب"""
     logo_src = get_logo_base64_src(uploaded_logo_obj)
-    logo_html = f'<img src="{logo_src}" style="max-height: 55px; width: auto;" />' if logo_src else ''
+    logo_html = f'<img src="{logo_src}" style="max-height: 75px; width: auto;" />' if logo_src else ''
+
+    d_name = direction_val.strip() if direction_val.strip() else "تاونات"
+    s_name = school_val.strip() if school_val.strip() else "ثانوية أولاد داود التأهيلية"
+    t_name = teacher_val.strip() if teacher_val.strip() else "عثمان شهير"
 
     student_str = student_val.strip() if student_val.strip() else "<span style='color:#94a3b8;'>[اسم التلميذ(ة)]</span>"
     class_str = class_val.strip() if class_val.strip() else "<span style='color:#94a3b8;'>[المستوى]</span>"
@@ -768,57 +767,45 @@ def render_live_preview_html(
     bullets_html = "".join([f"<li style='margin-bottom: 4px;'>{s}</li>" for s in situations_list])
     custom_html = f"<p style='margin-top: 6px; font-weight: 500;'><b>ملاحظات إضافية:</b> {custom_notes.strip()}</p>" if custom_notes.strip() else ""
 
-    html = f"""
-    <div class="paper-preview">
-        <!-- الترويسة -->
-        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #334155; padding-bottom: 8px; margin-bottom: 15px;">
-            <div style="text-align: right; width: 38%;">
-                <div style="font-weight: bold; font-size: 0.85rem;">المديرية الإقليمية: {direction_val}</div>
-                <div style="font-weight: bold; font-size: 0.85rem;">{school_val}</div>
-            </div>
-            <div style="text-align: center; width: 24%;">
-                {logo_html}
-            </div>
-            <div style="text-align: left; width: 38%;">
-                <div style="font-weight: bold; font-size: 0.85rem;">الموسم الدراسي: {year_val}</div>
-                <div style="font-weight: bold; font-size: 0.85rem;">الأستاذ(ة): {teacher_val}</div>
-            </div>
-        </div>
-
-        <!-- العنوان -->
-        <div style="text-align: center; margin: 18px 0;">
-            <h3 style="margin: 0; font-size: 1.15rem; text-decoration: underline; color: #0f172a;">📋 {report_title}</h3>
-        </div>
-
-        <!-- الديباجة -->
-        <p style="line-height: 1.7; font-size: 0.95rem; margin-bottom: 12px;">
-            سلام تام بوجود مولانا الإمام، وبعد؛<br><br>
-            يشرفني أن أرفع إلى علم السيد مدير المؤسسة هذا التقرير المتعلق بالسلوك الصادر عن التلميذ(ة): 
-            <b>« {student_str} »</b>، المتمدرس(ة) بالقسم: <b>« {class_str} »</b>، وذلك خلال حصة مادة <b>« {subject_val} »</b> 
-            بتاريخ: <b>{date_str}</b> (التوقيت: {time_str} / {room_str}).
-        </p>
-
-        <!-- وقائع المخالفة -->
-        <div style="font-weight: bold; font-size: 0.95rem; margin-top: 10px; margin-bottom: 6px;">وقائع وتفاصيل المخالفة الملاحظة:</div>
-        <ul style="padding-right: 20px; font-size: 0.9rem; line-height: 1.6; margin-top: 4px; margin-bottom: 10px;">
-            {bullets_html}
-        </ul>
-        {custom_html}
-
-        <!-- الإجراء الخاتمة -->
-        <p style="line-height: 1.7; font-size: 0.95rem; margin-top: 14px; margin-bottom: 25px;">
-            ونظراً لما يقتضيه النظام الداخلي للمؤسسة وضماناً للسير العادي والدراسي للحصص، أقترح عليكم: <b>{action_val}</b>.<br><br>
-            وتقبلوا فائق التقدير والاحترام.
-        </p>
-
-        <!-- التذييل السفلي للتوقيعات -->
-        <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 30px; border-top: 1px dashed #cbd5e1; padding-top: 12px; font-size: 0.85rem; font-weight: bold;">
-            <div>توقيع الأستاذ(ة)</div>
-            <div style="font-weight: normal; font-size: 0.8rem;">حرر بـ تاونات في: {date_str}</div>
-            <div>رأي وتوقيع الإدارة التربوية</div>
-        </div>
-    </div>
-    """
+    # كود HTML خالي تماماً من الفراغات البادئة (Indentations) لمنع تفسيره كـ Markdown Code Block
+    html = f"""<div class="paper-preview">
+<div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #334155; padding-bottom: 10px; margin-bottom: 15px;">
+<div style="text-align: right; width: 38%; white-space: nowrap;">
+<div style="font-weight: bold; font-size: 0.85rem;">المديرية الإقليمية: {d_name}</div>
+<div style="font-weight: bold; font-size: 0.85rem;">{s_name}</div>
+</div>
+<div style="text-align: center; width: 24%;">
+{logo_html}
+</div>
+<div style="text-align: left; width: 38%; white-space: nowrap;">
+<div style="font-weight: bold; font-size: 0.85rem;">الموسم الدراسي: {year_val}</div>
+<div style="font-weight: bold; font-size: 0.85rem;">الأستاذ(ة): {t_name}</div>
+</div>
+</div>
+<div style="text-align: center; margin: 18px 0;">
+<h3 style="margin: 0; font-size: 1.15rem; text-decoration: underline; color: #0f172a;">📋 {report_title}</h3>
+</div>
+<p style="line-height: 1.7; font-size: 0.95rem; margin-bottom: 12px;">
+سلام تام بوجود مولانا الإمام، وبعد؛<br><br>
+يشرفني أن أرفع إلى علم السيد مدير المؤسسة هذا التقرير المتعلق بالسلوك الصادر عن التلميذ(ة): 
+<b>« {student_str} »</b>، المتمدرس(ة) بالقسم: <b>« {class_str} »</b>، وذلك خلال حصة مادة <b>« {subject_val} »</b> 
+بتاريخ: <b>{date_str}</b> (التوقيت: {time_str} / {room_str}).
+</p>
+<div style="font-weight: bold; font-size: 0.95rem; margin-top: 10px; margin-bottom: 6px;">وقائع وتفاصيل المخالفة الملاحظة:</div>
+<ul style="padding-right: 20px; font-size: 0.9rem; line-height: 1.6; margin-top: 4px; margin-bottom: 10px;">
+{bullets_html}
+</ul>
+{custom_html}
+<p style="line-height: 1.7; font-size: 0.95rem; margin-top: 14px; margin-bottom: 25px;">
+ونظراً لما يقتضيه النظام الداخلي للمؤسسة وضماناً للسير العادي والدراسي للحصص، أقترح عليكم: <b>{action_val}</b>.<br><br>
+وتقبلوا فائق التقدير والاحترام.
+</p>
+<div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 30px; border-top: 1px dashed #cbd5e1; padding-top: 12px; font-size: 0.85rem; font-weight: bold;">
+<div>توقيع الأستاذ(ة)</div>
+<div style="font-weight: normal; font-size: 0.8rem;">حرر بـ تاونات في: {date_str}</div>
+<div>رأي وتوقيع الإدارة التربوية</div>
+</div>
+</div>"""
     return html
 
 
@@ -827,7 +814,7 @@ def render_report_tool():
         """
         <div style="text-align: center; padding: 15px; border-radius: 10px; background-color: #ffffff; border: 1px solid #e2e8f0; margin-bottom: 20px;">
             <h1 style="color: #1e293b; margin: 0; font-size: 1.6rem;">📝 محرر التقارير السريعة</h1>
-            <p style="color: #64748b; margin-top: 5px; font-size: 0.95rem;">توليد تقارير انضباطية رسمية ومسبوكة مع معاينة حية وتصدير بصيغتي Word و PDF</p>
+            <p style="color: #64748b; margin-top: 5px; font-size: 0.95rem;">توليد تقارير انضباطية رسمية ومسبوكة بصيغة Word (.docx) جاهزة للطباعة والتوقيع</p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -905,45 +892,22 @@ def render_report_tool():
 
     # --- أزرار التوليد والتنزيل ---
     st.markdown("---")
-    col_b1, col_b2 = st.columns(2)
+    if st.button("🚀 توليد وتجهيز التقرير (Word)", type="primary"):
+        if not student_name.strip():
+            st.warning("⚠️ يرجى إدخال اسم التلميذ(ة) لتوليد التقرير.")
+        else:
+            docx_bytes = generate_report_docx(
+                direction_val=direction_name, school_val=school_name, teacher_val=teacher_name,
+                year_val=school_year, student_val=student_name, class_val=class_level,
+                subject_val=subject_name, date_val=incident_date, time_val=incident_time,
+                room_val=room_number, report_title=current_config["title"],
+                situations_list=selected_situations, custom_notes=custom_details,
+                action_val=proposed_action, uploaded_logo_obj=uploaded_logo,
+            )
+            st.session_state.report_data_docx = docx_bytes
+            safe_name = student_name.strip().replace(" ", "_")
+            st.session_state.report_filename_docx = f"تقرير_{safe_name}.docx"
 
-    with col_b1:
-        if st.button("🚀 توليد وتجهيز التقرير (Word)", type="primary"):
-            if not student_name.strip():
-                st.warning("⚠️ يرجى إدخال اسم التلميذ(ة) لتوليد التقرير.")
-            else:
-                docx_bytes = generate_report_docx(
-                    direction_val=direction_name, school_val=school_name, teacher_val=teacher_name,
-                    year_val=school_year, student_val=student_name, class_val=class_level,
-                    subject_val=subject_name, date_val=incident_date, time_val=incident_time,
-                    room_val=room_number, report_title=current_config["title"],
-                    situations_list=selected_situations, custom_notes=custom_details,
-                    action_val=proposed_action, uploaded_logo_obj=uploaded_logo,
-                )
-                st.session_state.report_data_docx = docx_bytes
-                safe_name = student_name.strip().replace(" ", "_")
-                st.session_state.report_filename_docx = f"تقرير_{safe_name}.docx"
-
-    with col_b2:
-        if st.button("🖨️ تجهيز التقرير للطباعة المباشرة (PDF)", type="secondary"):
-            if not student_name.strip():
-                st.warning("⚠️ يرجى إدخال اسم التلميذ(ة) لتوليد ملف PDF.")
-            else:
-                # توليد ملف Word ثم دعوة المستخدم لتحميله أو حفظه كـ PDF عبر متصفحه
-                docx_bytes = generate_report_docx(
-                    direction_val=direction_name, school_val=school_name, teacher_val=teacher_name,
-                    year_val=school_year, student_val=student_name, class_val=class_level,
-                    subject_val=subject_name, date_val=incident_date, time_val=incident_time,
-                    room_val=room_number, report_title=current_config["title"],
-                    situations_list=selected_situations, custom_notes=custom_details,
-                    action_val=proposed_action, uploaded_logo_obj=uploaded_logo,
-                )
-                st.session_state.report_data_docx = docx_bytes
-                safe_name = student_name.strip().replace(" ", "_")
-                st.session_state.report_filename_docx = f"تقرير_{safe_name}.docx"
-                st.info("💡 يمكنك استخدام زر الطباعة في متصفحك للحفظ المباشر كـ PDF من شاشة المعاينة الحية، أو تحميل مستند Word أدناه.")
-
-    # إظهار أزرار التنزيل المجهزة
     if st.session_state.report_data_docx is not None:
         st.success("✅ المستند جاهز للتحميل والطباعة!")
         st.download_button(
