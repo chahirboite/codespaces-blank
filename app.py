@@ -2,6 +2,7 @@ import base64
 import datetime
 import io
 import os
+import re
 import zipfile
 import docx
 import streamlit as st
@@ -103,11 +104,43 @@ def find_arabic_font():
 
 
 def shape_ar(text):
-    """تهيئة النص العربي للعرض الصحيح في PDF"""
+    """تهيئة النص العربي للعرض الصحيح في PDF مع حماية السنوات والتواريخ من الانعكاس"""
     if not HAS_PDF_LIBS:
         return text
-    reshaped = arabic_reshaper.reshape(str(text))
-    return get_display(reshaped, base_dir="R")
+    protected = re.sub(r"(\d{4}[-/]\d{2,4}(?:/\d{2})?)", "\u202A\\1\u202C", str(text))
+    reshaped = arabic_reshaper.reshape(protected)
+    visual = get_display(reshaped, base_dir="R")
+    return re.sub(r"[\u202A-\u202E]", "", visual)
+
+
+def format_ar_paragraph(text, font_name, font_size, max_width):
+    """تقسيم الفقرة العربية إلى أسطر منطقية قبل التشكيل البصري لمنع انعكاس ترتيب الأسطر في PDF"""
+    if not HAS_PDF_LIBS:
+        return text
+    raw_lines = str(text).split("\n")
+    visual_lines = []
+    for raw_line in raw_lines:
+        stripped = raw_line.strip()
+        if not stripped:
+            visual_lines.append("")
+            continue
+        words = stripped.split(" ")
+        current_line = ""
+        for w in words:
+            candidate = f"{current_line} {w}" if current_line else w
+            shaped_cand = shape_ar(candidate)
+            if pdfmetrics.stringWidth(shaped_cand, font_name, font_size) <= max_width:
+                current_line = candidate
+            else:
+                if current_line:
+                    visual_lines.append(shape_ar(current_line))
+                    current_line = w
+                else:
+                    visual_lines.append(shape_ar(w))
+                    current_line = ""
+        if current_line:
+            visual_lines.append(shape_ar(current_line))
+    return "<br/>".join(visual_lines)
 
 
 # ==========================================
@@ -210,7 +243,7 @@ def add_header_line_to_cell(cell, text, is_arabic, align, is_first=False):
 
 
 # ==========================================
-# 3. قوائم وثوابت الخيارات
+# 3. قوائم وثوابت الخيارات (بصياغة إدارية وتربوية رصينة)
 # ==========================================
 
 LEVELS_AR = [
@@ -246,34 +279,34 @@ LEVELS_FR = [
 ]
 
 REPORT_TYPES = {
-    "1️⃣ تقرير التشويش والإخلال بالنظام": {
-        "title": "تقرير حول سلوك غير انضباطي (تشويش وعرقلة الدرس)",
+    "1️⃣ تقرير حول الإخلال بالنظام وعرقلة الدرس": {
+        "title": "تقرير تربوي حول الإخلال بالنظام العام وعرقلة السير العادي للحصة الدراسية",
         "situations": [
-            "التشويش المستمر أثناء الشرح ومقاطعة الأستاذ بدون استئذان",
-            "التنقل غير المبرر بين الطاولات وإثارة الفوضى داخل القاعة",
-            "الامتناع عن الالتزام بالتعليمات التربوية وتوجيهات الأستاذ",
-            "إحضار واستعمال أشياء غير مجدية للدرس (الهاتف / أجهزة رقمية)",
+            "إحداث الفوضى والتشويش المستمر أثناء تقديم الدرس، ومقاطعة الأستاذ بشكل متعمد دون استئذان.",
+            "عدم الالتزام بالانضباط الصفي والتنقل غير المبرر داخل القاعة، مما أربك السير العادي للحصة وحرم باقي المتعلمين من حقهم في التحصيل.",
+            "التمادي في مخالفة التوجيهات التربوية وعدم الامتثال لتنبيهات الأستاذ المتكررة.",
+            "الاستعمال غير المشروع للهاتف النقال / الأجهزة الإلكترونية داخل الفصل الدراسي في خرق سافر لمقتضيات النظام الداخلي للمؤسسة.",
         ],
-        "default_action": "استدعاء ولي الأمر والعرض على لجنة الانضباط / مستشار التوجيه",
+        "default_action": "استدعاء ولي أمر التلميذ(ة) وإحالة الملف على أنظار مجلس الانضباط لاتخاذ المتعين",
     },
-    "2️⃣ تقرير السلوك غير اللائق والامتناع": {
-        "title": "تقرير حول سلوك غير لائق وامتناع عن العمل",
+    "2️⃣ تقرير حول السلوك غير اللائق والامتناع عن العمل": {
+        "title": "تقرير إداري وتربوي حول سلوك غير لائق والامتناع عن أداء الواجبات الصفية",
         "situations": [
-            "الامتناع الصريح عن كتابة الدروس وإنجاز التمارين والفروض",
-            "التلفظ بعبارات غير لائقة أو صدر منه تصرف الاستفزاز تجاه الأستاذ أو زملائه",
-            "إتلاف تجهيزات القاعة أو الكتابة على الطاولات والجدران",
-            "مغادرة القاعة الدراسية قبل انتهاء الحصة بدون إذن الأستاذ",
+            "الامتناع المتعمد وغير المبرر عن تتبع مجريات الدرس، ورفض تدوين الملخصات وإنجاز الأنشطة الصفية والفروض.",
+            "التلفظ بعبارات نابية وغير لائقة، وإبداء سلوك استفزازي يمس بالاحترام الواجب للأطر التربوية وزملائه في القسم.",
+            "إلحاق أضرار مادية بتجهيزات القاعة الدراسية والعبث بممتلكات المؤسسة.",
+            "مغادرة القاعة الدراسية بصفة أحادية ودون الحصول على إذن مسبق من الأستاذ.",
         ],
-        "default_action": "إحالة التقرير على مجلس الانضباط واتخاذ الإجراءات الإدارية الحازمة",
+        "default_action": "عرض حالة التلميذ(ة) على مجلس الانضباط وتطبيق مقتضيات النظام الداخلي للمؤسسة",
     },
-    "3️⃣ تقرير التأخر والغياب المتكرر": {
-        "title": "تقرير حول التكرار في التأخر والغياب غير المبرر",
+    "3️⃣ تقرير حول التمادي في التأخر والغياب غير المبرر": {
+        "title": "تقرير حول التمادي في التأخر والتغيب غير المبرر عن الحصص الدراسية",
         "situations": [
-            "التأخر المتكرر عن بداية الحصة الدراسية بدون إذن الدخول",
-            "الغياب المتكرر غير المبرر عن حصص المادة",
-            "رفض إحضار إذن الدخول من الإدارة بعد غياب سابق",
+            "التأخر المتكرر وغير المبرر عن موعد انطلاق الحصة الدراسية، مما يربك انطلاقة الدرس.",
+            "التغيب المستمر بدون عذر مقبول عن حصص المادة، مع التهاون في تتبع الدروس.",
+            "الامتناع عن الإدلاء بورقة السماح بالدخول المسلمة من لدن الإدارة التربوية عقب الغياب.",
         ],
-        "default_action": "ربط الاتصال المباشر بولي الأمر وتطبيق القوانين الإدارية للمواظبة",
+        "default_action": "إشعار ولي الأمر رسمياً واتخاذ الإجراءات الإدارية الجاري بها العمل في شأن المواظبة",
     },
 }
 
@@ -644,6 +677,44 @@ def render_header_tool():
 # 7. منطق الأداة 2: محرر التقارير السريعة
 # ==========================================
 
+def build_report_texts(student_val, class_val, subject_val, date_val, time_val, room_val, custom_notes, action_val):
+    """بناء نصوص التقرير بصياغة إدارية وتربوية رسمية موحدة"""
+    student_str = student_val.strip() if student_val.strip() else "............................................"
+    class_str = class_val.strip() if class_val.strip() else "......................"
+    time_str = time_val.strip() if time_val.strip() else "......................"
+    room_str = room_val.strip() if room_val.strip() else "......................"
+    date_str = date_val.strftime("%Y/%m/%d")
+
+    salutation = "سلام تام بوجود مولانا الإمام المؤيد بالله، وبعد؛"
+
+    intro_text = (
+        f"يشرفني، السيد المدير المحترم، أن أرفع إلى كريم علمكم هذا التقرير التربوي قصد الإخبار واتخاذ ما ترونه مناسباً، "
+        f"في شأن التصرفات غير المنضبطة الصادرة عن التلميذ(ة): « {student_str} »، المتمدرس(ة) بالقسم: « {class_str} »، "
+        f"وذلك خلال حصة مادة « {subject_val} » المنعقدة بتاريخ {date_str} (التوقيت: {time_str} / {room_str})."
+    )
+
+    section_heading = "حيثيات الواقعة والأفعال المنسوبة للتلميذ(ة):"
+
+    custom_text = f"معطيات وملاحظات تكميلية: {custom_notes.strip()}" if custom_notes.strip() else ""
+
+    closing_body = (
+        f"وحرصاً منا على صون حرمة الفضاء التربوي، وتكريس مبادئ الانضباط والمسؤولية المنصوص عليها في النظام الداخلي للمؤسسة، "
+        f"ألتمس من سيادتكم التدخل لاتخاذ الإجراءات التربوية والإدارية اللازمة في حق المعني(ة) بالأمر، ولا سيما: {action_val}."
+    )
+
+    closing_salutation = "وتفضلوا، السيد المدير المحترم، بقبول أسمى عبارات التقدير والاحترام.\nوالسلام."
+
+    return {
+        "salutation": salutation,
+        "intro_text": intro_text,
+        "section_heading": section_heading,
+        "custom_text": custom_text,
+        "closing_body": closing_body,
+        "closing_salutation": closing_salutation,
+        "date_str": date_str,
+    }
+
+
 def generate_report_docx(
     direction_val, school_val, teacher_val, year_val, student_val, class_val,
     subject_val, date_val, time_val, room_val, report_title, situations_list,
@@ -715,64 +786,69 @@ def generate_report_docx(
     p_space.paragraph_format.space_before = Pt(0)
     p_space.paragraph_format.space_after = Pt(6)
 
+    texts = build_report_texts(
+        student_val, class_val, subject_val, date_val, time_val, room_val, custom_notes, action_val
+    )
+
     # عنوان التقرير
     p_title = doc.add_paragraph()
     p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p_title.paragraph_format.space_before = Pt(10)
-    p_title.paragraph_format.space_after = Pt(12)
-    r_title = add_styled_run(p_title, f"📋 {report_title}", is_arabic=True, font_size=15, bold=True)
+    p_title.paragraph_format.space_after = Pt(14)
+    r_title = add_styled_run(p_title, f"الموضوع: {report_title}", is_arabic=True, font_size=14, bold=True)
     r_title.font.underline = True
+
+    # الافتتاحية
+    p_sal = doc.add_paragraph()
+    p_sal.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_sal.paragraph_format.space_before = Pt(2)
+    p_sal.paragraph_format.space_after = Pt(10)
+    add_styled_run(p_sal, texts["salutation"], is_arabic=True, font_size=12.5, bold=True)
 
     # ديباجة التقرير
     p_body1 = doc.add_paragraph()
+    p_body1.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
     p_body1.paragraph_format.space_before = Pt(4)
-    p_body1.paragraph_format.space_after = Pt(6)
-    p_body1.paragraph_format.line_spacing = 1.25
-
-    student_str = student_val.strip() if student_val.strip() else "............................................"
-    class_str = class_val.strip() if class_val.strip() else "......................"
-    time_str = time_val.strip() if time_val.strip() else "......................"
-    room_str = room_val.strip() if room_val.strip() else "......................"
-    date_str = date_val.strftime("%Y/%m/%d")
-
-    intro_text = (
-        f"سلام تام بوجود مولانا الإمام، وبعد؛\n\n"
-        f"يشرفني أن أرفع إلى علم السيد مدير المؤسسة هذا التقرير المتعلق بالسلوك الصادر عن التلميذ(ة): "
-        f"« {student_str} »، المتمدرس(ة) بالقسم: « {class_str} »، وذلك خلال حصة مادة « {subject_val} » "
-        f"بتاريخ: {date_str} (التوقيت: {time_str} / {room_str})."
-    )
-    add_styled_run(p_body1, intro_text, is_arabic=True, font_size=12, bold=False)
+    p_body1.paragraph_format.space_after = Pt(8)
+    p_body1.paragraph_format.line_spacing = 1.3
+    add_styled_run(p_body1, texts["intro_text"], is_arabic=True, font_size=12, bold=False)
 
     # تفاصيل الوقائع
     p_situations_head = doc.add_paragraph()
-    p_situations_head.paragraph_format.space_before = Pt(8)
+    p_situations_head.paragraph_format.space_before = Pt(6)
     p_situations_head.paragraph_format.space_after = Pt(4)
-    add_styled_run(p_situations_head, "وقائع وتفاصيل المخالفة الملاحظة:", is_arabic=True, font_size=12, bold=True)
+    add_styled_run(p_situations_head, texts["section_heading"], is_arabic=True, font_size=12, bold=True)
 
     if situations_list:
         for sit in situations_list:
             p_bullet = doc.add_paragraph(style='List Bullet')
+            p_bullet.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
             p_bullet.paragraph_format.space_before = Pt(2)
-            p_bullet.paragraph_format.space_after = Pt(2)
+            p_bullet.paragraph_format.space_after = Pt(3)
+            p_bullet.paragraph_format.line_spacing = 1.2
             add_styled_run(p_bullet, sit, is_arabic=True, font_size=11.5, bold=False)
 
-    if custom_notes.strip():
+    if texts["custom_text"]:
         p_custom = doc.add_paragraph()
+        p_custom.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
         p_custom.paragraph_format.space_before = Pt(4)
         p_custom.paragraph_format.space_after = Pt(4)
-        add_styled_run(p_custom, f"ملاحظات إضافية: {custom_notes.strip()}", is_arabic=True, font_size=11.5, bold=False)
+        add_styled_run(p_custom, texts["custom_text"], is_arabic=True, font_size=11.5, bold=False)
 
     # الإجراء والخاتمة
     p_action = doc.add_paragraph()
+    p_action.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
     p_action.paragraph_format.space_before = Pt(10)
-    p_action.paragraph_format.space_after = Pt(16)
-    p_action.paragraph_format.line_spacing = 1.25
-    action_text = (
-        f"ونظراً لما يقتضيه النظام الداخلي للمؤسسة وضماناً للسير العادي والدراسي للحصص، "
-        f"أقترح عليكم: {action_val}.\n\n"
-        f"وتقبلوا فائق التقدير والاحترام."
-    )
-    add_styled_run(p_action, action_text, is_arabic=True, font_size=12, bold=False)
+    p_action.paragraph_format.space_after = Pt(8)
+    p_action.paragraph_format.line_spacing = 1.3
+    add_styled_run(p_action, texts["closing_body"], is_arabic=True, font_size=12, bold=False)
+
+    p_end = doc.add_paragraph()
+    p_end.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_end.paragraph_format.space_before = Pt(4)
+    p_end.paragraph_format.space_after = Pt(16)
+    p_end.paragraph_format.line_spacing = 1.25
+    add_styled_run(p_end, texts["closing_salutation"], is_arabic=True, font_size=12, bold=False)
 
     # 1. التواقيع داخل جسم الصفحة مع مساحة كافية وأسطر منقطة لرأي الإدارة
     sig_tbl = doc.add_table(rows=1, cols=2)
@@ -788,7 +864,6 @@ def generate_report_docx(
         sigBorders.append(b)
     sig_tblPr.append(sigBorders)
 
-    # العمود الأيمن: توقيع الأستاذ + مساحة بيضاء كافية للتوقيع
     cell_sig_r = sig_tbl.rows[0].cells[0]
     cell_sig_r.width = Inches(3.2)
     cell_sig_r.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.TOP
@@ -798,7 +873,6 @@ def generate_report_docx(
     p_sig_r.paragraph_format.space_after = Pt(75)
     add_styled_run(p_sig_r, "توقيع الأستاذ(ة):", is_arabic=True, font_size=11.5, bold=True)
 
-    # العمود الأيسر: رأي وتوقيع الإدارة التربوية + أسطر منقطة للتدوين
     cell_sig_l = sig_tbl.rows[0].cells[1]
     cell_sig_l.width = Inches(3.5)
     cell_sig_l.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.TOP
@@ -831,7 +905,7 @@ def generate_report_docx(
 
     add_styled_run(p_foot, f"الأستاذ(ة): {t_name}", is_arabic=True, font_size=9.5, bold=False)
     p_foot.add_run("\t\t")
-    add_styled_run(p_foot, f"حرر في: {date_str}", is_arabic=True, font_size=9.5, bold=False)
+    add_styled_run(p_foot, f"حرر في: {texts['date_str']}", is_arabic=True, font_size=9.5, bold=False)
 
     output = io.BytesIO()
     doc.save(output)
@@ -844,7 +918,7 @@ def generate_report_pdf(
     subject_val, date_val, time_val, room_val, report_title, situations_list,
     custom_notes, action_val, uploaded_logo_obj
 ):
-    """توليد نسخة PDF رسمية باللغة العربية جاهزة للطباعة"""
+    """توليد نسخة PDF رسمية باللغة العربية جاهزة للطباعة بترتيب أسطر سليم"""
     if not HAS_PDF_LIBS:
         return None
     font_path = find_arabic_font()
@@ -862,12 +936,15 @@ def generate_report_pdf(
         pagesize=A4,
         rightMargin=45,
         leftMargin=45,
-        topMargin=38,
-        bottomMargin=38,
+        topMargin=36,
+        bottomMargin=36,
     )
 
-    style_right = ParagraphStyle("ArRight", fontName="ArabicFont", fontSize=11.5, leading=18, alignment=TA_RIGHT)
-    style_title = ParagraphStyle("ArTitle", fontName="ArabicFont", fontSize=14, leading=20, alignment=TA_CENTER)
+    usable_width = A4[0] - 90
+
+    style_right = ParagraphStyle("ArRight", fontName="ArabicFont", fontSize=11, leading=18, alignment=TA_RIGHT)
+    style_center = ParagraphStyle("ArCenter", fontName="ArabicFont", fontSize=11.5, leading=18, alignment=TA_CENTER)
+    style_title = ParagraphStyle("ArTitle", fontName="ArabicFont", fontSize=12.5, leading=19, alignment=TA_CENTER)
     style_hdr_r = ParagraphStyle("ArHdrR", fontName="ArabicFont", fontSize=9.5, leading=14, alignment=TA_RIGHT)
     style_hdr_l = ParagraphStyle("ArHdrL", fontName="ArabicFont", fontSize=9.5, leading=14, alignment=TA_LEFT)
     style_foot_r = ParagraphStyle("ArFootR", fontName="ArabicFont", fontSize=8.5, leading=12, alignment=TA_RIGHT, textColor=colors.grey)
@@ -876,11 +953,10 @@ def generate_report_pdf(
     d_name = direction_val.strip() if direction_val.strip() else "تاونات"
     s_name = school_val.strip() if school_val.strip() else "ثانوية أولاد داود التأهيلية"
     t_name = teacher_val.strip() if teacher_val.strip() else "عثمان شهير"
-    student_str = student_val.strip() if student_val.strip() else "............................"
-    class_str = class_val.strip() if class_val.strip() else "...................."
-    time_str = time_val.strip() if time_val.strip() else "...................."
-    room_str = room_val.strip() if room_val.strip() else "...................."
-    date_str = date_val.strftime("%Y/%m/%d")
+
+    texts = build_report_texts(
+        student_val, class_val, subject_val, date_val, time_val, room_val, custom_notes, action_val
+    )
 
     story = []
 
@@ -908,46 +984,44 @@ def generate_report_pdf(
         ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
     ]))
     story.append(hdr_table)
-    story.append(Spacer(1, 16))
+    story.append(Spacer(1, 14))
 
-    # 2. العنوان
-    story.append(Paragraph(f"<u>{shape_ar(report_title)}</u>", style_title))
-    story.append(Spacer(1, 16))
+    # 2. الموضوع والعنوان
+    wrapped_title = format_ar_paragraph(f"الموضوع: {report_title}", "ArabicFont", 12.5, usable_width)
+    story.append(Paragraph(f"<u>{wrapped_title}</u>", style_title))
+    story.append(Spacer(1, 12))
 
-    # 3. الديباجة
-    story.append(Paragraph(shape_ar("سلام تام بوجود مولانا الإمام، وبعد؛"), style_right))
+    # 3. الافتتاحية والديباجة
+    story.append(Paragraph(shape_ar(texts["salutation"]), style_center))
     story.append(Spacer(1, 10))
 
-    intro = (
-        f"يشرفني أن أرفع إلى علم السيد مدير المؤسسة هذا التقرير المتعلق بالسلوك الصادر عن التلميذ(ة): "
-        f"« {student_str} »، المتمدرس(ة) بالقسم: « {class_str} »، وذلك خلال حصة مادة « {subject_val} » "
-        f"بتاريخ: {date_str} (التوقيت: {time_str} / {room_str})."
-    )
-    story.append(Paragraph(shape_ar(intro), style_right))
-    story.append(Spacer(1, 12))
+    wrapped_intro = format_ar_paragraph(texts["intro_text"], "ArabicFont", 11, usable_width)
+    story.append(Paragraph(wrapped_intro, style_right))
+    story.append(Spacer(1, 10))
 
     # 4. الوقائع
-    story.append(Paragraph(shape_ar("وقائع وتفاصيل المخالفة الملاحظة:"), style_right))
-    story.append(Spacer(1, 6))
+    story.append(Paragraph(shape_ar(texts["section_heading"]), style_right))
+    story.append(Spacer(1, 5))
     for sit in situations_list:
-        story.append(Paragraph(shape_ar(f"• {sit}"), style_right))
+        wrapped_sit = format_ar_paragraph(f"• {sit}", "ArabicFont", 11, usable_width - 10)
+        story.append(Paragraph(wrapped_sit, style_right))
         story.append(Spacer(1, 4))
 
-    if custom_notes.strip():
+    if texts["custom_text"]:
         story.append(Spacer(1, 4))
-        story.append(Paragraph(shape_ar(f"ملاحظات إضافية: {custom_notes.strip()}"), style_right))
+        wrapped_custom = format_ar_paragraph(texts["custom_text"], "ArabicFont", 11, usable_width)
+        story.append(Paragraph(wrapped_custom, style_right))
 
-    story.append(Spacer(1, 12))
+    story.append(Spacer(1, 10))
 
     # 5. الإجراء والخاتمة
-    closing = (
-        f"ونظراً لما يقتضيه النظام الداخلي للمؤسسة وضماناً للسير العادي والدراسي للحصص، "
-        f"أقترح عليكم: {action_val}."
-    )
-    story.append(Paragraph(shape_ar(closing), style_right))
-    story.append(Spacer(1, 10))
-    story.append(Paragraph(shape_ar("وتقبلوا فائق التقدير والاحترام."), style_right))
-    story.append(Spacer(1, 22))
+    wrapped_closing = format_ar_paragraph(texts["closing_body"], "ArabicFont", 11, usable_width)
+    story.append(Paragraph(wrapped_closing, style_right))
+    story.append(Spacer(1, 8))
+
+    wrapped_end = format_ar_paragraph(texts["closing_salutation"], "ArabicFont", 11.5, usable_width)
+    story.append(Paragraph(wrapped_end, style_center))
+    story.append(Spacer(1, 18))
 
     # 6. التواقيع ومساحة رأي الإدارة بالنقط
     admin_col = (
@@ -965,14 +1039,14 @@ def generate_report_pdf(
     sig_table = Table(sig_data, colWidths=[260, 245])
     sig_table.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 45),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 40),
     ]))
     story.append(sig_table)
-    story.append(Spacer(1, 20))
+    story.append(Spacer(1, 16))
 
     # 7. التذييل السفلي
     foot_data = [[
-        Paragraph(shape_ar(f"حرر في: {date_str}"), style_foot_l),
+        Paragraph(shape_ar(f"حرر في: {texts['date_str']}"), style_foot_l),
         Paragraph(shape_ar(f"الأستاذ(ة): {t_name}"), style_foot_r),
     ]]
     foot_table = Table(foot_data, colWidths=[252, 253])
@@ -992,7 +1066,7 @@ def render_live_preview_html(
     subject_val, date_val, time_val, room_val, report_title, situations_list,
     custom_notes, action_val, uploaded_logo_obj
 ):
-    """توليد المعاينة الحية التفاعلية مع مساحة كافية للتوقيع وأسطر منقطة لرأي الإدارة"""
+    """توليد المعاينة الحية التفاعلية بالصياغة الإدارية الرسمية"""
     logo_src = get_logo_base64_src(uploaded_logo_obj)
     logo_html = f'<img src="{logo_src}" style="max-height: 48px; max-width: 90px; height: auto; width: auto; object-fit: contain;" />' if logo_src else ''
 
@@ -1000,14 +1074,14 @@ def render_live_preview_html(
     s_name = school_val.strip() if school_val.strip() else "ثانوية أولاد داود التأهيلية"
     t_name = teacher_val.strip() if teacher_val.strip() else "عثمان شهير"
 
-    student_str = student_val.strip() if student_val.strip() else "<span style='color:#94a3b8;'>[اسم التلميذ(ة)]</span>"
-    class_str = class_val.strip() if class_val.strip() else "<span style='color:#94a3b8;'>[المستوى]</span>"
-    time_str = time_val.strip() if time_val.strip() else "[التوقيت]"
-    room_str = room_val.strip() if room_val.strip() else "[القاعة]"
+    student_disp = student_val.strip() if student_val.strip() else "<span style='color:#94a3b8;'>[اسم التلميذ(ة)]</span>"
+    class_disp = class_val.strip() if class_val.strip() else "<span style='color:#94a3b8;'>[المستوى]</span>"
+    time_disp = time_val.strip() if time_val.strip() else "[التوقيت]"
+    room_disp = room_val.strip() if room_val.strip() else "[القاعة]"
     date_str = date_val.strftime("%Y/%m/%d")
 
-    bullets_html = "".join([f"<li style='margin-bottom: 4px;'>{s}</li>" for s in situations_list])
-    custom_html = f"<p style='margin-top: 6px; font-weight: 500;'><b>ملاحظات إضافية:</b> {custom_notes.strip()}</p>" if custom_notes.strip() else ""
+    bullets_html = "".join([f"<li style='margin-bottom: 5px; text-align: justify;'>{s}</li>" for s in situations_list])
+    custom_html = f"<p style='margin-top: 6px; font-weight: 500; text-align: justify;'><b>معطيات وملاحظات تكميلية:</b> {custom_notes.strip()}</p>" if custom_notes.strip() else ""
 
     html = f"""<div class="paper-preview" style="box-sizing: border-box; width: 100%; max-width: 100%; overflow: hidden; padding: 18px 14px;">
 <div style="display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 4px; border-bottom: 2px solid #334155; padding-bottom: 8px; margin-bottom: 15px;">
@@ -1023,24 +1097,30 @@ def render_live_preview_html(
 <div style="white-space: nowrap;">الأستاذ(ة): {t_name}</div>
 </div>
 </div>
-<div style="text-align: center; margin: 16px 0;">
-<h3 style="margin: 0; font-size: clamp(0.95rem, 3.2vw, 1.15rem); text-decoration: underline; color: #0f172a;">📋 {report_title}</h3>
+<div style="text-align: center; margin: 14px 0;">
+<h3 style="margin: 0; font-size: clamp(0.90rem, 3.0vw, 1.10rem); text-decoration: underline; color: #0f172a; line-height: 1.5;">الموضوع: {report_title}</h3>
 </div>
-<p style="line-height: 1.7; font-size: clamp(0.85rem, 2.8vw, 0.95rem); margin-bottom: 12px; word-break: break-word;">
-سلام تام بوجود مولانا الإمام، وبعد؛<br><br>
-يشرفني أن أرفع إلى علم السيد مدير المؤسسة هذا التقرير المتعلق بالسلوك الصادر عن التلميذ(ة): 
-<b>« {student_str} »</b>، المتمدرس(ة) بالقسم: <b>« {class_str} »</b>، وذلك خلال حصة مادة <b>« {subject_val} »</b> 
-بتاريخ: <b>{date_str}</b> (التوقيت: {time_str} / {room_str}).
+<div style="text-align: center; font-weight: bold; font-size: clamp(0.85rem, 2.8vw, 0.98rem); margin-bottom: 12px;">
+سلام تام بوجود مولانا الإمام المؤيد بالله، وبعد؛
+</div>
+<p style="line-height: 1.75; text-align: justify; font-size: clamp(0.83rem, 2.7vw, 0.94rem); margin-bottom: 12px; word-break: break-word;">
+يشرفني، السيد المدير المحترم، أن أرفع إلى كريم علمكم هذا التقرير التربوي قصد الإخبار واتخاذ ما ترونه مناسباً، 
+في شأن التصرفات غير المنضبطة الصادرة عن التلميذ(ة): <b>« {student_disp} »</b>، المتمدرس(ة) بالقسم: <b>« {class_disp} »</b>، 
+وذلك خلال حصة مادة <b>« {subject_val} »</b> المنعقدة بتاريخ <b>{date_str}</b> (التوقيت: {time_disp} / {room_disp}).
 </p>
-<div style="font-weight: bold; font-size: clamp(0.85rem, 2.8vw, 0.95rem); margin-top: 10px; margin-bottom: 6px;">وقائع وتفاصيل المخالفة الملاحظة:</div>
-<ul style="padding-right: 20px; font-size: clamp(0.8rem, 2.6vw, 0.9rem); line-height: 1.6; margin-top: 4px; margin-bottom: 10px;">
+<div style="font-weight: bold; font-size: clamp(0.83rem, 2.7vw, 0.94rem); margin-top: 10px; margin-bottom: 6px;">حيثيات الواقعة والأفعال المنسوبة للتلميذ(ة):</div>
+<ul style="padding-right: 20px; font-size: clamp(0.80rem, 2.6vw, 0.90rem); line-height: 1.65; margin-top: 4px; margin-bottom: 10px;">
 {bullets_html}
 </ul>
 {custom_html}
-<p style="line-height: 1.7; font-size: clamp(0.85rem, 2.8vw, 0.95rem); margin-top: 14px; margin-bottom: 20px; word-break: break-word;">
-ونظراً لما يقتضيه النظام الداخلي للمؤسسة وضماناً للسير العادي والدراسي للحصص، أقترح عليكم: <b>{action_val}</b>.<br><br>
-وتقبلوا فائق التقدير والاحترام.
+<p style="line-height: 1.75; text-align: justify; font-size: clamp(0.83rem, 2.7vw, 0.94rem); margin-top: 14px; margin-bottom: 10px; word-break: break-word;">
+وحرصاً منا على صون حرمة الفضاء التربوي، وتكريس مبادئ الانضباط والمسؤولية المنصوص عليها في النظام الداخلي للمؤسسة، 
+ألتمس من سيادتكم التدخل لاتخاذ الإجراءات التربوية والإدارية اللازمة في حق المعني(ة) بالأمر، ولا سيما: <b>{action_val}</b>.
 </p>
+<div style="text-align: center; font-size: clamp(0.83rem, 2.7vw, 0.94rem); line-height: 1.6; margin-top: 8px; margin-bottom: 20px;">
+وتفضلوا، السيد المدير المحترم، بقبول أسمى عبارات التقدير والاحترام.<br>
+<b>والسلام.</b>
+</div>
 <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-top: 25px; margin-bottom: 70px; padding-top: 10px; font-size: clamp(0.75rem, 2.5vw, 0.9rem);">
 <div style="width: 45%; text-align: right; font-weight: bold;">
 <div>توقيع الأستاذ(ة):</div>
