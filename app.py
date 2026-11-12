@@ -3,6 +3,7 @@ import datetime
 import io
 import os
 import re
+import urllib.request
 import zipfile
 import docx
 import streamlit as st
@@ -31,7 +32,62 @@ except ImportError:
 
 
 # ==========================================
-# 1. الدوال المساعدة المشتركة (Utility Functions)
+# 1. إعدادات الأنماط الطباعية والخطوط (Typography Profiles)
+# ==========================================
+
+FONT_PROFILES = {
+    "🏛️ إداري أصيل (Simplified Arabic / Amiri)": {
+        "word_font": "Simplified Arabic",
+        "word_body_size": 14.0,
+        "word_bullet_size": 13.5,
+        "word_title_size": 16.0,
+        "word_sal_size": 14.5,
+        "word_header_base": 11.5,
+        "word_footer_size": 11.0,
+        "word_line_spacing": 1.35,
+        "css_font": "'Amiri', 'Noto Naskh Arabic', serif",
+        "css_body_size": "clamp(0.95rem, 3.1vw, 1.08rem)",
+        "css_title_size": "clamp(1.05rem, 3.5vw, 1.25rem)",
+        "css_line_height": "1.9",
+        "pdf_font_key": "amiri",
+        "pdf_body_size": 13.0,
+        "pdf_title_size": 15.0,
+        "pdf_leading": 21,
+    },
+    "📱 عصري واضح (Arial / Noto Naskh)": {
+        "word_font": "Arial",
+        "word_body_size": 12.5,
+        "word_bullet_size": 12.0,
+        "word_title_size": 14.5,
+        "word_sal_size": 13.0,
+        "word_header_base": 10.5,
+        "word_footer_size": 10.0,
+        "word_line_spacing": 1.4,
+        "css_font": "'Noto Naskh Arabic', 'Cairo', sans-serif",
+        "css_body_size": "clamp(0.90rem, 2.9vw, 1.02rem)",
+        "css_title_size": "clamp(1.00rem, 3.3vw, 1.18rem)",
+        "css_line_height": "1.85",
+        "pdf_font_key": "noto",
+        "pdf_body_size": 11.5,
+        "pdf_title_size": 13.5,
+        "pdf_leading": 20,
+    },
+}
+
+REMOTE_ARABIC_FONTS = {
+    "amiri": {
+        "filename": "Amiri-Regular.ttf",
+        "url": "https://raw.githubusercontent.com/google/fonts/main/ofl/amiri/Amiri-Regular.ttf",
+    },
+    "noto": {
+        "filename": "NotoNaskhArabic-Regular.ttf",
+        "url": "https://raw.githubusercontent.com/google/fonts/main/ofl/notonaskharabic/NotoNaskhArabic%5Bwght%5D.ttf",
+    },
+}
+
+
+# ==========================================
+# 2. الدوال المساعدة المشتركة (Utility Functions)
 # ==========================================
 
 def get_auto_school_year():
@@ -93,11 +149,38 @@ def get_logo_base64_src(uploaded_logo):
     return get_static_logo_data_uri()
 
 
-def find_arabic_font():
-    """البحث عن خط عربي مثبت في النظام لتوليد PDF"""
+def get_arabic_pdf_font(preferred_key="amiri"):
+    """البحث عن خط عربي احترافي أو تحميله مؤقتاً لتوليد PDF بجودة عالية"""
+    font_info = REMOTE_ARABIC_FONTS.get(preferred_key, REMOTE_ARABIC_FONTS["amiri"])
+    cache_dir = "/tmp" if os.path.exists("/tmp") else "."
+    cached_path = os.path.join(cache_dir, font_info["filename"])
+
+    if os.path.exists(cached_path) and os.path.getsize(cached_path) > 15000:
+        return cached_path
+
+    try:
+        req = urllib.request.Request(
+            font_info["url"],
+            headers={"User-Agent": "Mozilla/5.0"},
+        )
+        with urllib.request.urlopen(req, timeout=4) as resp:
+            data = resp.read()
+            if len(data) > 15000:
+                with open(cached_path, "wb") as f:
+                    f.write(data)
+                return cached_path
+    except Exception:
+        if os.path.exists(cached_path):
+            try:
+                os.remove(cached_path)
+            except Exception:
+                pass
+
     candidates = [
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/hosny-amiri/Amiri-Regular.ttf",
+        "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf",
         "/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
         "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
         "C:/Windows/Fonts/arial.ttf",
         "C:/Windows/Fonts/tahoma.ttf",
@@ -106,10 +189,17 @@ def find_arabic_font():
     for path in candidates:
         if os.path.exists(path):
             return path
+
     if os.path.exists("/usr/share/fonts"):
         for root, _, files in os.walk("/usr/share/fonts"):
             for f in files:
-                if f.lower() in ["dejavusans.ttf", "notosansarabic-regular.ttf", "freesans.ttf"]:
+                if f.lower() in [
+                    "amiri-regular.ttf",
+                    "notonaskharabic-regular.ttf",
+                    "notosansarabic-regular.ttf",
+                    "dejavusans.ttf",
+                    "freesans.ttf",
+                ]:
                     return os.path.join(root, f)
     return None
 
@@ -155,7 +245,7 @@ def format_ar_paragraph(text, font_name, font_size, max_width):
 
 
 # ==========================================
-# 2. معالجة هياكل Word (docx XML Helpers)
+# 3. معالجة هياكل Word وضبط الخطوط المركبة (docx XML Helpers)
 # ==========================================
 
 def clear_and_prepare_headers(section):
@@ -210,51 +300,69 @@ def set_cell_no_wrap(cell):
         tcPr.append(OxmlElement("w:noWrap"))
 
 
-def add_styled_run(paragraph, text, is_arabic=True, font_size=10.0, bold=False):
-    """إضافة نص منسق يدعم العربية والفرنسية"""
+def add_styled_run(paragraph, text, is_arabic=True, font_size=14.0, bold=False, font_name=None):
+    """إضافة نص منسق مع ضبط خط النصوص المركبة (w:cs) لضمان ظهور الخط العربي بدقة"""
     if is_arabic:
+        chosen_font = font_name if font_name else "Simplified Arabic"
         paragraph.paragraph_format.bidi = True
         pPr = paragraph._p.get_or_add_pPr()
         if pPr.find(qn("w:bidi")) is None:
             pPr.append(OxmlElement("w:bidi"))
+
         run = paragraph.add_run(text)
-        run.font.name = "Traditional Arabic"
+        run.font.name = chosen_font
         run.font.size = Pt(font_size)
         run.bold = bold
+
         rPr = run._r.get_or_add_rPr()
+        rFonts = rPr.find(qn("w:rFonts"))
+        if rFonts is None:
+            rFonts = OxmlElement("w:rFonts")
+            rPr.insert(0, rFonts)
+        rFonts.set(qn("w:ascii"), chosen_font)
+        rFonts.set(qn("w:hAnsi"), chosen_font)
+        rFonts.set(qn("w:cs"), chosen_font)
+
         if rPr.find(qn("w:rtl")) is None:
             rPr.append(OxmlElement("w:rtl"))
+
+        szCs = rPr.find(qn("w:szCs"))
+        if szCs is None:
+            szCs = OxmlElement("w:szCs")
+            rPr.append(szCs)
+        szCs.set(qn("w:val"), str(int(font_size * 2)))
     else:
+        chosen_font = font_name if font_name else "Arial"
         run = paragraph.add_run(text)
-        run.font.name = "Arial"
+        run.font.name = chosen_font
         run.font.size = Pt(font_size)
         run.bold = bold
     return run
 
 
-def add_header_line_to_cell(cell, text, is_arabic, align, is_first=False):
+def add_header_line_to_cell(cell, text, is_arabic, align, is_first=False, font_name=None, base_size=11.0):
     """إضافة سطر مستقل داخل الخلية مع تعديل حجم الخط تلقائياً لمنع الرجوع للسطر"""
     p = cell.paragraphs[0] if is_first else cell.add_paragraph()
     p.alignment = align
     p.paragraph_format.space_before = Pt(0)
     p.paragraph_format.space_after = Pt(2)
-    p.paragraph_format.line_spacing = 1.0
+    p.paragraph_format.line_spacing = 1.05
 
     length = len(text)
     if length > 38:
-        font_size = 7.5
+        font_size = max(8.5, base_size - 2.5)
     elif length > 30:
-        font_size = 8.2
+        font_size = max(9.0, base_size - 1.8)
     elif length > 22:
-        font_size = 8.8
+        font_size = max(9.5, base_size - 1.0)
     else:
-        font_size = 10.0
+        font_size = base_size
 
-    add_styled_run(p, text, is_arabic=is_arabic, font_size=font_size, bold=True)
+    add_styled_run(p, text, is_arabic=is_arabic, font_size=font_size, bold=True, font_name=font_name)
 
 
 # ==========================================
-# 3. قوائم وثوابت الخيارات (بصياغة إدارية وتراتبية)
+# 4. قوائم وثوابت الخيارات (بصياغة إدارية وتراتبية)
 # ==========================================
 
 LEVELS_AR = [
@@ -289,7 +397,6 @@ LEVELS_FR = [
     "Autre niveau...",
 ]
 
-# قائمة الإجراءات التأديبية والإدارية مرتبة تراتبياً من الأخف إلى الأشد
 GRADED_ACTIONS_MAP = {
     "1️⃣ تنبيه تربوي: توجيه تنبيه شفوي والتذكير بالانضباط": "توجيه تنبيه تربوي شفوي وتذكير المعني(ة) بالأمر بضرورة الالتزام بالانضباط الصفي",
     "2️⃣ إنذار كتابي: توجيه إنذار مع توقيع التزام خطي": "توجيه إنذار كتابي مع إلزام التلميذ(ة) بتوقيع التزام خطي بعدم تكرار المخالفة",
@@ -333,8 +440,9 @@ REPORT_TYPES = {
     },
 }
 
+
 # ==========================================
-# 4. إعدادات Streamlit وذاكرة الجلسة
+# 5. إعدادات Streamlit وذاكرة الجلسة والخطوط العامة
 # ==========================================
 
 st.set_page_config(
@@ -358,8 +466,53 @@ if "report_data_pdf" not in st.session_state:
 if "report_filename_pdf" not in st.session_state:
     st.session_state.report_filename_pdf = ""
 
+st.markdown(
+    """
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&family=Cairo:wght@400;600;700;800&family=Noto+Naskh+Arabic:wght@400;600;700&display=swap');
+
+    .stApp {
+        background-color: #f8fafc;
+        font-family: 'Cairo', sans-serif;
+    }
+    html, body, [class*="css"] {
+        font-family: 'Cairo', sans-serif;
+    }
+    .stButton>button {
+        width: 100%;
+        border-radius: 8px;
+        font-weight: 700;
+        font-family: 'Cairo', sans-serif;
+        height: 46px;
+        background-color: #2563eb;
+        color: white;
+        border: none;
+        box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);
+    }
+    .stButton>button:hover { background-color: #1d4ed8; }
+    .paper-preview {
+        background-color: #ffffff;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        padding: 22px 16px;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.06);
+        direction: rtl;
+        text-align: right;
+        color: #0f172a;
+        margin-top: 15px;
+        margin-bottom: 18px;
+        box-sizing: border-box;
+        width: 100%;
+        overflow: hidden;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
 # ==========================================
-# 5. القائمة الجانبية (Sidebar Navigation)
+# 6. القائمة الجانبية (Sidebar Navigation)
 # ==========================================
 
 with st.sidebar:
@@ -398,45 +551,9 @@ with st.sidebar:
         use_container_width=True,
     )
 
-st.markdown(
-    """
-    <style>
-    .stApp { background-color: #f8fafc; }
-    .stButton>button {
-        width: 100%;
-        border-radius: 8px;
-        font-weight: bold;
-        height: 48px;
-        background-color: #2563eb;
-        color: white;
-        border: none;
-        box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);
-    }
-    .stButton>button:hover { background-color: #1d4ed8; }
-    .paper-preview {
-        background-color: #ffffff;
-        border: 1px solid #cbd5e1;
-        border-radius: 8px;
-        padding: 20px 14px;
-        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
-        direction: rtl;
-        text-align: right;
-        font-family: 'Segoe UI', Tahoma, Geneva, sans-serif;
-        color: #1e293b;
-        margin-top: 15px;
-        margin-bottom: 25px;
-        box-sizing: border-box;
-        width: 100%;
-        overflow: hidden;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
 
 # ==========================================
-# 6. منطق الأداة 1: الترويسة المدرسية الذكية
+# 7. منطق الأداة 1: الترويسة المدرسية الذكية
 # ==========================================
 
 def process_docx_header(
@@ -456,6 +573,8 @@ def process_docx_header(
     s_year = school_year_val
 
     clean_hex = border_color_hex.lstrip("#")
+    ar_header_font = "Simplified Arabic"
+    ar_header_size = 11.5
 
     for section in doc.sections:
         section.top_margin = Inches(1.0)
@@ -498,25 +617,25 @@ def process_docx_header(
         if is_arabic:
             cell_right = row.cells[0]
             set_cell_rtl(cell_right)
-            add_header_line_to_cell(cell_right, f"مادة {subj}", is_arabic=True, align=WD_ALIGN_PARAGRAPH.RIGHT, is_first=True)
-            add_header_line_to_cell(cell_right, c_level, is_arabic=True, align=WD_ALIGN_PARAGRAPH.RIGHT, is_first=False)
-            add_header_line_to_cell(cell_right, f"الموسم الدراسي: {s_year}", is_arabic=True, align=WD_ALIGN_PARAGRAPH.RIGHT, is_first=False)
+            add_header_line_to_cell(cell_right, f"مادة {subj}", is_arabic=True, align=WD_ALIGN_PARAGRAPH.RIGHT, is_first=True, font_name=ar_header_font, base_size=ar_header_size)
+            add_header_line_to_cell(cell_right, c_level, is_arabic=True, align=WD_ALIGN_PARAGRAPH.RIGHT, is_first=False, font_name=ar_header_font, base_size=ar_header_size)
+            add_header_line_to_cell(cell_right, f"الموسم الدراسي: {s_year}", is_arabic=True, align=WD_ALIGN_PARAGRAPH.RIGHT, is_first=False, font_name=ar_header_font, base_size=ar_header_size)
 
             cell_left = row.cells[2]
             set_cell_rtl(cell_left)
-            add_header_line_to_cell(cell_left, f"المديرية الإقليمية: {d_name}", is_arabic=True, align=WD_ALIGN_PARAGRAPH.LEFT, is_first=True)
-            add_header_line_to_cell(cell_left, s_name, is_arabic=True, align=WD_ALIGN_PARAGRAPH.LEFT, is_first=False)
-            add_header_line_to_cell(cell_left, f"الأستاذ: {t_name}", is_arabic=True, align=WD_ALIGN_PARAGRAPH.LEFT, is_first=False)
+            add_header_line_to_cell(cell_left, f"المديرية الإقليمية: {d_name}", is_arabic=True, align=WD_ALIGN_PARAGRAPH.LEFT, is_first=True, font_name=ar_header_font, base_size=ar_header_size)
+            add_header_line_to_cell(cell_left, s_name, is_arabic=True, align=WD_ALIGN_PARAGRAPH.LEFT, is_first=False, font_name=ar_header_font, base_size=ar_header_size)
+            add_header_line_to_cell(cell_left, f"الأستاذ: {t_name}", is_arabic=True, align=WD_ALIGN_PARAGRAPH.LEFT, is_first=False, font_name=ar_header_font, base_size=ar_header_size)
         else:
             cell_left = row.cells[0]
-            add_header_line_to_cell(cell_left, f"Direction Provinciale: {d_name}", is_arabic=False, align=WD_ALIGN_PARAGRAPH.LEFT, is_first=True)
-            add_header_line_to_cell(cell_left, s_name, is_arabic=False, align=WD_ALIGN_PARAGRAPH.LEFT, is_first=False)
-            add_header_line_to_cell(cell_left, f"Professeur: {t_name}", is_arabic=False, align=WD_ALIGN_PARAGRAPH.LEFT, is_first=False)
+            add_header_line_to_cell(cell_left, f"Direction Provinciale: {d_name}", is_arabic=False, align=WD_ALIGN_PARAGRAPH.LEFT, is_first=True, base_size=10.0)
+            add_header_line_to_cell(cell_left, s_name, is_arabic=False, align=WD_ALIGN_PARAGRAPH.LEFT, is_first=False, base_size=10.0)
+            add_header_line_to_cell(cell_left, f"Professeur: {t_name}", is_arabic=False, align=WD_ALIGN_PARAGRAPH.LEFT, is_first=False, base_size=10.0)
 
             cell_right = row.cells[2]
-            add_header_line_to_cell(cell_right, f"Matière: {subj}", is_arabic=False, align=WD_ALIGN_PARAGRAPH.RIGHT, is_first=True)
-            add_header_line_to_cell(cell_right, c_level, is_arabic=False, align=WD_ALIGN_PARAGRAPH.RIGHT, is_first=False)
-            add_header_line_to_cell(cell_right, f"Année scolaire: {s_year}", is_arabic=False, align=WD_ALIGN_PARAGRAPH.RIGHT, is_first=False)
+            add_header_line_to_cell(cell_right, f"Matière: {subj}", is_arabic=False, align=WD_ALIGN_PARAGRAPH.RIGHT, is_first=True, base_size=10.0)
+            add_header_line_to_cell(cell_right, c_level, is_arabic=False, align=WD_ALIGN_PARAGRAPH.RIGHT, is_first=False, base_size=10.0)
+            add_header_line_to_cell(cell_right, f"Année scolaire: {s_year}", is_arabic=False, align=WD_ALIGN_PARAGRAPH.RIGHT, is_first=False, base_size=10.0)
 
         cell_1 = row.cells[1]
         if is_arabic:
@@ -564,7 +683,7 @@ def process_docx_header(
                 if is_arabic:
                     p_foot.paragraph_format.tab_stops.add_tab_stop(right_pos, WD_TAB_ALIGNMENT.LEFT)
                     p_foot.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-                    add_styled_run(p_foot, t_name, is_arabic=True, font_size=10, bold=False)
+                    add_styled_run(p_foot, t_name, is_arabic=True, font_size=11, bold=False, font_name="Simplified Arabic")
                     p_foot.add_run("\t\t")
                     add_styled_run(p_foot, s_year, is_arabic=False, font_size=10, bold=False)
                 else:
@@ -625,9 +744,9 @@ def render_header_tool():
 
     col_sch1, col_sch2 = st.columns(2)
     with col_sch1:
-        direction_name = st.text_input("المديرية الإقليمية / Direction Provinciale:", value="", placeholder="تاونات" if is_arabic else "Taounate")
+        direction_name = st.text_input("المديرية الإقليمية / Direction Provinciale:", value="", placeholder="مثال: تاونات" if is_arabic else "Ex: Taounate")
     with col_sch2:
-        school_name = st.text_input("المؤسسة التعليمية / Établissement:", value="", placeholder="ثانوية أولاد داود التأهيلية" if is_arabic else "Lycée Qualifiant Oulad Daoud")
+        school_name = st.text_input("المؤسسة التعليمية / Établissement:", value="", placeholder="مثال: ثانوية أولاد داود التأهيلية" if is_arabic else "Ex: Lycée Qualifiant Oulad Daoud")
 
     col1, col2 = st.columns(2)
     with col1:
@@ -697,7 +816,7 @@ def render_header_tool():
 
 
 # ==========================================
-# 7. منطق الأداة 2: محرر التقارير السريعة
+# 8. منطق الأداة 2: محرر التقارير السريعة
 # ==========================================
 
 def build_report_texts(student_val, class_val, subject_val, date_val, time_val, room_val, custom_notes, action_val):
@@ -744,10 +863,19 @@ def build_report_texts(student_val, class_val, subject_val, date_val, time_val, 
 def generate_report_docx(
     direction_val, school_val, teacher_val, year_val, student_val, class_val,
     subject_val, date_val, time_val, room_val, report_title, situations_list,
-    custom_notes, action_val, uploaded_logo_obj
+    custom_notes, action_val, uploaded_logo_obj, font_profile
 ):
     doc = docx.Document()
     logo_file = get_logo_bytes(uploaded_logo_obj)
+
+    w_font = font_profile["word_font"]
+    w_body = font_profile["word_body_size"]
+    w_bullet = font_profile["word_bullet_size"]
+    w_title = font_profile["word_title_size"]
+    w_sal = font_profile["word_sal_size"]
+    w_hdr = font_profile["word_header_base"]
+    w_foot = font_profile["word_footer_size"]
+    w_spacing = font_profile["word_line_spacing"]
 
     section = doc.sections[0]
     section.top_margin = Inches(0.75)
@@ -771,7 +899,7 @@ def generate_report_docx(
     bottom_border.set(qn("w:val"), "single")
     bottom_border.set(qn("w:sz"), "8")
     bottom_border.set(qn("w:space"), "0")
-    bottom_border.set(qn("w:color"), "444444")
+    bottom_border.set(qn("w:color"), "334155")
     tblBorders.append(bottom_border)
     tblPr.append(tblBorders)
 
@@ -788,8 +916,8 @@ def generate_report_docx(
 
     cell_r = row.cells[0]
     set_cell_rtl(cell_r)
-    add_header_line_to_cell(cell_r, f"المديرية الإقليمية: {d_name}", is_arabic=True, align=WD_ALIGN_PARAGRAPH.RIGHT, is_first=True)
-    add_header_line_to_cell(cell_r, s_name, is_arabic=True, align=WD_ALIGN_PARAGRAPH.RIGHT, is_first=False)
+    add_header_line_to_cell(cell_r, f"المديرية الإقليمية: {d_name}", is_arabic=True, align=WD_ALIGN_PARAGRAPH.RIGHT, is_first=True, font_name=w_font, base_size=w_hdr)
+    add_header_line_to_cell(cell_r, s_name, is_arabic=True, align=WD_ALIGN_PARAGRAPH.RIGHT, is_first=False, font_name=w_font, base_size=w_hdr)
 
     cell_c = row.cells[1]
     set_cell_rtl(cell_c)
@@ -805,8 +933,8 @@ def generate_report_docx(
 
     cell_l = row.cells[2]
     set_cell_rtl(cell_l)
-    add_header_line_to_cell(cell_l, f"الموسم الدراسي: {year_val}", is_arabic=True, align=WD_ALIGN_PARAGRAPH.LEFT, is_first=True)
-    add_header_line_to_cell(cell_l, f"الأستاذ(ة): {t_name}", is_arabic=True, align=WD_ALIGN_PARAGRAPH.LEFT, is_first=False)
+    add_header_line_to_cell(cell_l, f"الموسم الدراسي: {year_val}", is_arabic=True, align=WD_ALIGN_PARAGRAPH.LEFT, is_first=True, font_name=w_font, base_size=w_hdr)
+    add_header_line_to_cell(cell_l, f"الأستاذ(ة): {t_name}", is_arabic=True, align=WD_ALIGN_PARAGRAPH.LEFT, is_first=False, font_name=w_font, base_size=w_hdr)
 
     p_space = header.add_paragraph()
     p_space.paragraph_format.space_before = Pt(0)
@@ -821,7 +949,7 @@ def generate_report_docx(
     p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p_title.paragraph_format.space_before = Pt(10)
     p_title.paragraph_format.space_after = Pt(14)
-    r_title = add_styled_run(p_title, f"الموضوع: {report_title}", is_arabic=True, font_size=14, bold=True)
+    r_title = add_styled_run(p_title, f"الموضوع: {report_title}", is_arabic=True, font_size=w_title, bold=True, font_name=w_font)
     r_title.font.underline = True
 
     # الافتتاحية
@@ -829,21 +957,21 @@ def generate_report_docx(
     p_sal.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p_sal.paragraph_format.space_before = Pt(2)
     p_sal.paragraph_format.space_after = Pt(10)
-    add_styled_run(p_sal, texts["salutation"], is_arabic=True, font_size=12.5, bold=True)
+    add_styled_run(p_sal, texts["salutation"], is_arabic=True, font_size=w_sal, bold=True, font_name=w_font)
 
     # ديباجة التقرير
     p_body1 = doc.add_paragraph()
     p_body1.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
     p_body1.paragraph_format.space_before = Pt(4)
     p_body1.paragraph_format.space_after = Pt(8)
-    p_body1.paragraph_format.line_spacing = 1.3
-    add_styled_run(p_body1, texts["intro_text"], is_arabic=True, font_size=12, bold=False)
+    p_body1.paragraph_format.line_spacing = w_spacing
+    add_styled_run(p_body1, texts["intro_text"], is_arabic=True, font_size=w_body, bold=False, font_name=w_font)
 
     # تفاصيل الوقائع
     p_situations_head = doc.add_paragraph()
     p_situations_head.paragraph_format.space_before = Pt(6)
     p_situations_head.paragraph_format.space_after = Pt(4)
-    add_styled_run(p_situations_head, texts["section_heading"], is_arabic=True, font_size=12, bold=True)
+    add_styled_run(p_situations_head, texts["section_heading"], is_arabic=True, font_size=w_body, bold=True, font_name=w_font)
 
     if situations_list:
         for sit in situations_list:
@@ -851,32 +979,33 @@ def generate_report_docx(
             p_bullet.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
             p_bullet.paragraph_format.space_before = Pt(2)
             p_bullet.paragraph_format.space_after = Pt(3)
-            p_bullet.paragraph_format.line_spacing = 1.2
-            add_styled_run(p_bullet, sit, is_arabic=True, font_size=11.5, bold=False)
+            p_bullet.paragraph_format.line_spacing = w_spacing
+            add_styled_run(p_bullet, sit, is_arabic=True, font_size=w_bullet, bold=False, font_name=w_font)
 
     if texts["custom_text"]:
         p_custom = doc.add_paragraph()
         p_custom.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
         p_custom.paragraph_format.space_before = Pt(4)
         p_custom.paragraph_format.space_after = Pt(4)
-        add_styled_run(p_custom, texts["custom_text"], is_arabic=True, font_size=11.5, bold=False)
+        p_custom.paragraph_format.line_spacing = w_spacing
+        add_styled_run(p_custom, texts["custom_text"], is_arabic=True, font_size=w_bullet, bold=False, font_name=w_font)
 
     # الإجراء والخاتمة
     p_action = doc.add_paragraph()
     p_action.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
     p_action.paragraph_format.space_before = Pt(10)
     p_action.paragraph_format.space_after = Pt(8)
-    p_action.paragraph_format.line_spacing = 1.3
-    add_styled_run(p_action, texts["closing_body"], is_arabic=True, font_size=12, bold=False)
+    p_action.paragraph_format.line_spacing = w_spacing
+    add_styled_run(p_action, texts["closing_body"], is_arabic=True, font_size=w_body, bold=False, font_name=w_font)
 
     p_end = doc.add_paragraph()
     p_end.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p_end.paragraph_format.space_before = Pt(4)
     p_end.paragraph_format.space_after = Pt(16)
-    p_end.paragraph_format.line_spacing = 1.25
-    add_styled_run(p_end, texts["closing_salutation"], is_arabic=True, font_size=12, bold=False)
+    p_end.paragraph_format.line_spacing = 1.3
+    add_styled_run(p_end, texts["closing_salutation"], is_arabic=True, font_size=w_body, bold=False, font_name=w_font)
 
-    # 1. التواقيع داخل جسم الصفحة مع مساحة كافية وأسطر منقطة لرأي الإدارة
+    # التواقيع داخل جسم الصفحة مع مساحة كافية وأسطر منقطة لرأي الإدارة
     sig_tbl = doc.add_table(rows=1, cols=2)
     sig_tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
     sig_tbl.autofit = False
@@ -897,7 +1026,7 @@ def generate_report_docx(
     p_sig_r = cell_sig_r.paragraphs[0]
     p_sig_r.alignment = WD_ALIGN_PARAGRAPH.RIGHT
     p_sig_r.paragraph_format.space_after = Pt(75)
-    add_styled_run(p_sig_r, "توقيع الأستاذ(ة):", is_arabic=True, font_size=11.5, bold=True)
+    add_styled_run(p_sig_r, "توقيع الأستاذ(ة):", is_arabic=True, font_size=w_bullet, bold=True, font_name=w_font)
 
     cell_sig_l = sig_tbl.rows[0].cells[1]
     cell_sig_l.width = Inches(3.5)
@@ -906,16 +1035,16 @@ def generate_report_docx(
     p_sig_l = cell_sig_l.paragraphs[0]
     p_sig_l.alignment = WD_ALIGN_PARAGRAPH.RIGHT
     p_sig_l.paragraph_format.space_after = Pt(8)
-    add_styled_run(p_sig_l, "رأي وتوقيع الإدارة التربوية:", is_arabic=True, font_size=11.5, bold=True)
+    add_styled_run(p_sig_l, "رأي وتوقيع الإدارة التربوية:", is_arabic=True, font_size=w_bullet, bold=True, font_name=w_font)
 
     for idx in range(3):
         p_dots = cell_sig_l.add_paragraph()
         p_dots.alignment = WD_ALIGN_PARAGRAPH.RIGHT
         p_dots.paragraph_format.space_before = Pt(4)
         p_dots.paragraph_format.space_after = Pt(28 if idx == 2 else 6)
-        add_styled_run(p_dots, "...........................................................", is_arabic=True, font_size=11, bold=False)
+        add_styled_run(p_dots, "...........................................................", is_arabic=True, font_size=11, bold=False, font_name=w_font)
 
-    # 2. تذييل الصفحات الرسمي (Pied de page): اسم الأستاذ والتاريخ فقط
+    # تذييل الصفحات الرسمي (Pied de page)
     clear_all_footers_completely(section)
     footer = section.footer
     p_foot = footer.add_paragraph()
@@ -929,9 +1058,9 @@ def generate_report_docx(
     p_foot.paragraph_format.tab_stops.add_tab_stop(right_pos, WD_TAB_ALIGNMENT.LEFT)
     p_foot.alignment = WD_ALIGN_PARAGRAPH.RIGHT
 
-    add_styled_run(p_foot, f"الأستاذ(ة): {t_name}", is_arabic=True, font_size=9.5, bold=False)
+    add_styled_run(p_foot, f"الأستاذ(ة): {t_name}", is_arabic=True, font_size=w_foot, bold=False, font_name=w_font)
     p_foot.add_run("\t\t")
-    add_styled_run(p_foot, f"حرر في: {texts['date_str']}", is_arabic=True, font_size=9.5, bold=False)
+    add_styled_run(p_foot, f"حرر في: {texts['date_str']}", is_arabic=True, font_size=w_foot, bold=False, font_name=w_font)
 
     output = io.BytesIO()
     doc.save(output)
@@ -942,19 +1071,24 @@ def generate_report_docx(
 def generate_report_pdf(
     direction_val, school_val, teacher_val, year_val, student_val, class_val,
     subject_val, date_val, time_val, room_val, report_title, situations_list,
-    custom_notes, action_val, uploaded_logo_obj
+    custom_notes, action_val, uploaded_logo_obj, font_profile
 ):
-    """توليد نسخة PDF رسمية باللغة العربية جاهزة للطباعة بترتيب أسطر سليم"""
+    """توليد نسخة PDF رسمية باللغة العربية بخط طباعي احترافي واضح"""
     if not HAS_PDF_LIBS:
         return None
-    font_path = find_arabic_font()
+    font_path = get_arabic_pdf_font(font_profile["pdf_font_key"])
     if not font_path:
         return None
 
+    registered_font = f"ArabicFont_{font_profile['pdf_font_key']}"
     try:
-        pdfmetrics.registerFont(TTFont("ArabicFont", font_path))
+        pdfmetrics.registerFont(TTFont(registered_font, font_path))
     except Exception:
         return None
+
+    p_body = font_profile["pdf_body_size"]
+    p_title = font_profile["pdf_title_size"]
+    p_lead = font_profile["pdf_leading"]
 
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
@@ -968,13 +1102,13 @@ def generate_report_pdf(
 
     usable_width = A4[0] - 90
 
-    style_right = ParagraphStyle("ArRight", fontName="ArabicFont", fontSize=11, leading=18, alignment=TA_RIGHT)
-    style_center = ParagraphStyle("ArCenter", fontName="ArabicFont", fontSize=11.5, leading=18, alignment=TA_CENTER)
-    style_title = ParagraphStyle("ArTitle", fontName="ArabicFont", fontSize=12.5, leading=19, alignment=TA_CENTER)
-    style_hdr_r = ParagraphStyle("ArHdrR", fontName="ArabicFont", fontSize=9.5, leading=14, alignment=TA_RIGHT)
-    style_hdr_l = ParagraphStyle("ArHdrL", fontName="ArabicFont", fontSize=9.5, leading=14, alignment=TA_LEFT)
-    style_foot_r = ParagraphStyle("ArFootR", fontName="ArabicFont", fontSize=8.5, leading=12, alignment=TA_RIGHT, textColor=colors.grey)
-    style_foot_l = ParagraphStyle("ArFootL", fontName="ArabicFont", fontSize=8.5, leading=12, alignment=TA_LEFT, textColor=colors.grey)
+    style_right = ParagraphStyle("ArRight", fontName=registered_font, fontSize=p_body, leading=p_lead, alignment=TA_RIGHT)
+    style_center = ParagraphStyle("ArCenter", fontName=registered_font, fontSize=p_body + 0.5, leading=p_lead, alignment=TA_CENTER)
+    style_title = ParagraphStyle("ArTitle", fontName=registered_font, fontSize=p_title, leading=p_lead + 3, alignment=TA_CENTER)
+    style_hdr_r = ParagraphStyle("ArHdrR", fontName=registered_font, fontSize=10.5, leading=15, alignment=TA_RIGHT)
+    style_hdr_l = ParagraphStyle("ArHdrL", fontName=registered_font, fontSize=10.5, leading=15, alignment=TA_LEFT)
+    style_foot_r = ParagraphStyle("ArFootR", fontName=registered_font, fontSize=9.5, leading=13, alignment=TA_RIGHT, textColor=colors.grey)
+    style_foot_l = ParagraphStyle("ArFootL", fontName=registered_font, fontSize=9.5, leading=13, alignment=TA_LEFT, textColor=colors.grey)
 
     d_name = direction_val.strip() if direction_val.strip() else "........................"
     s_name = school_val.strip() if school_val.strip() else "...................................."
@@ -1013,7 +1147,7 @@ def generate_report_pdf(
     story.append(Spacer(1, 14))
 
     # 2. الموضوع والعنوان
-    wrapped_title = format_ar_paragraph(f"الموضوع: {report_title}", "ArabicFont", 12.5, usable_width)
+    wrapped_title = format_ar_paragraph(f"الموضوع: {report_title}", registered_font, p_title, usable_width)
     story.append(Paragraph(f"<u>{wrapped_title}</u>", style_title))
     story.append(Spacer(1, 12))
 
@@ -1021,7 +1155,7 @@ def generate_report_pdf(
     story.append(Paragraph(shape_ar(texts["salutation"]), style_center))
     story.append(Spacer(1, 10))
 
-    wrapped_intro = format_ar_paragraph(texts["intro_text"], "ArabicFont", 11, usable_width)
+    wrapped_intro = format_ar_paragraph(texts["intro_text"], registered_font, p_body, usable_width)
     story.append(Paragraph(wrapped_intro, style_right))
     story.append(Spacer(1, 10))
 
@@ -1029,23 +1163,23 @@ def generate_report_pdf(
     story.append(Paragraph(shape_ar(texts["section_heading"]), style_right))
     story.append(Spacer(1, 5))
     for sit in situations_list:
-        wrapped_sit = format_ar_paragraph(f"• {sit}", "ArabicFont", 11, usable_width - 10)
+        wrapped_sit = format_ar_paragraph(f"• {sit}", registered_font, p_body, usable_width - 10)
         story.append(Paragraph(wrapped_sit, style_right))
         story.append(Spacer(1, 4))
 
     if texts["custom_text"]:
         story.append(Spacer(1, 4))
-        wrapped_custom = format_ar_paragraph(texts["custom_text"], "ArabicFont", 11, usable_width)
+        wrapped_custom = format_ar_paragraph(texts["custom_text"], registered_font, p_body, usable_width)
         story.append(Paragraph(wrapped_custom, style_right))
 
     story.append(Spacer(1, 10))
 
     # 5. الإجراء والخاتمة
-    wrapped_closing = format_ar_paragraph(texts["closing_body"], "ArabicFont", 11, usable_width)
+    wrapped_closing = format_ar_paragraph(texts["closing_body"], registered_font, p_body, usable_width)
     story.append(Paragraph(wrapped_closing, style_right))
     story.append(Spacer(1, 8))
 
-    wrapped_end = format_ar_paragraph(texts["closing_salutation"], "ArabicFont", 11.5, usable_width)
+    wrapped_end = format_ar_paragraph(texts["closing_salutation"], registered_font, p_body + 0.5, usable_width)
     story.append(Paragraph(wrapped_end, style_center))
     story.append(Spacer(1, 18))
 
@@ -1090,11 +1224,16 @@ def generate_report_pdf(
 def render_live_preview_html(
     direction_val, school_val, teacher_val, year_val, student_val, class_val,
     subject_val, date_val, time_val, room_val, report_title, situations_list,
-    custom_notes, action_val, uploaded_logo_obj
+    custom_notes, action_val, uploaded_logo_obj, font_profile
 ):
-    """توليد المعاينة الحية التفاعلية بالصياغة الإدارية الرسمية"""
+    """توليد المعاينة الحية التفاعلية بالخط الطباعي المختار"""
     logo_src = get_logo_base64_src(uploaded_logo_obj)
-    logo_html = f'<img src="{logo_src}" style="max-height: 48px; max-width: 90px; height: auto; width: auto; object-fit: contain;" />' if logo_src else ''
+    logo_html = f'<img src="{logo_src}" style="max-height: 50px; max-width: 92px; height: auto; width: auto; object-fit: contain;" />' if logo_src else ''
+
+    css_font = font_profile["css_font"]
+    css_body_sz = font_profile["css_body_size"]
+    css_title_sz = font_profile["css_title_size"]
+    css_lh = font_profile["css_line_height"]
 
     d_name = direction_val.strip() if direction_val.strip() else "<span style='color:#94a3b8;'>[المديرية الإقليمية]</span>"
     s_name = school_val.strip() if school_val.strip() else "<span style='color:#94a3b8;'>[المؤسسة التعليمية]</span>"
@@ -1111,48 +1250,48 @@ def render_live_preview_html(
     date_str = date_val.strftime("%Y/%m/%d")
     action_disp = action_val.strip() if action_val.strip() else "اتخاذ المتعين وفق مقتضيات النظام الداخلي للمؤسسة"
 
-    bullets_html = "".join([f"<li style='margin-bottom: 5px; text-align: justify;'>{s}</li>" for s in situations_list])
+    bullets_html = "".join([f"<li style='margin-bottom: 6px; text-align: justify;'>{s}</li>" for s in situations_list])
     custom_html = f"<p style='margin-top: 6px; font-weight: 500; text-align: justify;'><b>معطيات وملاحظات تكميلية:</b> {custom_notes.strip()}</p>" if custom_notes.strip() else ""
 
-    html = f"""<div class="paper-preview" style="box-sizing: border-box; width: 100%; max-width: 100%; overflow: hidden; padding: 18px 14px;">
-<div style="display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 4px; border-bottom: 2px solid #334155; padding-bottom: 8px; margin-bottom: 15px;">
-<div style="text-align: right; font-size: clamp(0.60rem, 2.0vw, 0.82rem); line-height: 1.4; font-weight: bold; overflow: hidden;">
+    html = f"""<div class="paper-preview" style="font-family: {css_font}; box-sizing: border-box; width: 100%; max-width: 100%; overflow: hidden; padding: 20px 15px;">
+<div style="display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 4px; border-bottom: 2px solid #334155; padding-bottom: 8px; margin-bottom: 16px;">
+<div style="text-align: right; font-size: clamp(0.68rem, 2.2vw, 0.88rem); line-height: 1.45; font-weight: bold; overflow: hidden;">
 <div style="white-space: nowrap;">المديرية الإقليمية: {d_name}</div>
 <div style="white-space: nowrap;">{s_name}</div>
 </div>
 <div style="text-align: center; display: flex; justify-content: center; align-items: center; padding: 0 2px;">
 {logo_html}
 </div>
-<div style="text-align: left; font-size: clamp(0.60rem, 2.0vw, 0.82rem); line-height: 1.4; font-weight: bold; overflow: hidden;">
+<div style="text-align: left; font-size: clamp(0.68rem, 2.2vw, 0.88rem); line-height: 1.45; font-weight: bold; overflow: hidden;">
 <div style="white-space: nowrap;">الموسم الدراسي: <span style="display: inline-block; direction: ltr; unicode-bidi: embed; white-space: nowrap;">{year_val}</span></div>
 <div style="white-space: nowrap;">الأستاذ(ة): {t_name}</div>
 </div>
 </div>
 <div style="text-align: center; margin: 14px 0;">
-<h3 style="margin: 0; font-size: clamp(0.90rem, 3.0vw, 1.10rem); text-decoration: underline; color: #0f172a; line-height: 1.5;">الموضوع: {report_title}</h3>
+<h3 style="font-family: {css_font}; margin: 0; font-size: {css_title_sz}; font-weight: 700; text-decoration: underline; color: #0f172a; line-height: 1.6;">الموضوع: {report_title}</h3>
 </div>
-<div style="text-align: center; font-weight: bold; font-size: clamp(0.85rem, 2.8vw, 0.98rem); margin-bottom: 12px;">
+<div style="text-align: center; font-weight: bold; font-size: {css_body_sz}; margin-bottom: 12px;">
 سلام تام بوجود مولانا الإمام المؤيد بالله، وبعد؛
 </div>
-<p style="line-height: 1.75; text-align: justify; font-size: clamp(0.83rem, 2.7vw, 0.94rem); margin-bottom: 12px; word-break: break-word;">
+<p style="line-height: {css_lh}; text-align: justify; font-size: {css_body_sz}; margin-bottom: 12px; word-break: break-word;">
 يشرفني، السيد المدير المحترم، أن أرفع إلى كريم علمكم هذا التقرير التربوي قصد الإخبار واتخاذ ما ترونه مناسباً، 
 في شأن التصرفات غير المنضبطة الصادرة عن التلميذ(ة): <b>« {student_disp} »</b>، المتمدرس(ة) بالقسم: <b>« {class_disp} »</b>، 
 وذلك خلال حصة مادة <b>« {subj_disp} »</b> المنعقدة بتاريخ <b>{date_str}</b> (التوقيت: {time_disp} / {room_disp}).
 </p>
-<div style="font-weight: bold; font-size: clamp(0.83rem, 2.7vw, 0.94rem); margin-top: 10px; margin-bottom: 6px;">حيثيات الواقعة والأفعال المنسوبة للتلميذ(ة):</div>
-<ul style="padding-right: 20px; font-size: clamp(0.80rem, 2.6vw, 0.90rem); line-height: 1.65; margin-top: 4px; margin-bottom: 10px;">
+<div style="font-weight: bold; font-size: {css_body_sz}; margin-top: 10px; margin-bottom: 6px;">حيثيات الواقعة والأفعال المنسوبة للتلميذ(ة):</div>
+<ul style="padding-right: 22px; font-size: {css_body_sz}; line-height: {css_lh}; margin-top: 4px; margin-bottom: 10px;">
 {bullets_html}
 </ul>
 {custom_html}
-<p style="line-height: 1.75; text-align: justify; font-size: clamp(0.83rem, 2.7vw, 0.94rem); margin-top: 14px; margin-bottom: 10px; word-break: break-word;">
+<p style="line-height: {css_lh}; text-align: justify; font-size: {css_body_sz}; margin-top: 14px; margin-bottom: 10px; word-break: break-word;">
 وحرصاً منا على صون حرمة الفضاء التربوي، وتكريس مبادئ الانضباط والمسؤولية المنصوص عليها في النظام الداخلي للمؤسسة، 
 ألتمس من سيادتكم التدخل لاتخاذ الإجراءات التربوية والإدارية اللازمة في حق المعني(ة) بالأمر، ولا سيما: <b>{action_disp}</b>.
 </p>
-<div style="text-align: center; font-size: clamp(0.83rem, 2.7vw, 0.94rem); line-height: 1.6; margin-top: 8px; margin-bottom: 20px;">
+<div style="text-align: center; font-size: {css_body_sz}; line-height: 1.7; margin-top: 8px; margin-bottom: 20px;">
 وتفضلوا، السيد المدير المحترم، بقبول أسمى عبارات التقدير والاحترام.<br>
 <b>والسلام.</b>
 </div>
-<div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-top: 25px; margin-bottom: 70px; padding-top: 10px; font-size: clamp(0.75rem, 2.5vw, 0.9rem);">
+<div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-top: 25px; margin-bottom: 70px; padding-top: 10px; font-size: clamp(0.82rem, 2.7vw, 0.98rem);">
 <div style="width: 45%; text-align: right; font-weight: bold;">
 <div>توقيع الأستاذ(ة):</div>
 </div>
@@ -1165,7 +1304,7 @@ def render_live_preview_html(
 </div>
 </div>
 </div>
-<div style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px; border-top: 1px dashed #cbd5e1; padding-top: 8px; font-size: clamp(0.65rem, 2.2vw, 0.78rem); color: #64748b;">
+<div style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px; border-top: 1px dashed #cbd5e1; padding-top: 8px; font-size: clamp(0.72rem, 2.3vw, 0.84rem); color: #64748b;">
 <div>الأستاذ(ة): {t_name}</div>
 <div>حرر في: {date_str}</div>
 </div>
@@ -1174,10 +1313,17 @@ def render_live_preview_html(
 
 
 def render_report_tool():
+    # تهيئة اختيار الخط مسبقاً لضمان التحديث الفوري للمعاينة
+    font_options = list(FONT_PROFILES.keys())
+    if "font_style_choice" not in st.session_state:
+        st.session_state.font_style_choice = font_options[0]
+
+    active_font_profile = FONT_PROFILES[st.session_state.font_style_choice]
+
     st.markdown(
         """
         <div style="text-align: center; padding: 15px; border-radius: 10px; background-color: #ffffff; border: 1px solid #e2e8f0; margin-bottom: 20px;">
-            <h1 style="color: #1e293b; margin: 0; font-size: 1.6rem;">📝 محرر التقارير السريعة</h1>
+            <h1 style="color: #1e293b; margin: 0; font-size: 1.6rem; font-weight: 800;">📝 محرر التقارير السريعة</h1>
             <p style="color: #64748b; margin-top: 5px; font-size: 0.95rem;">توليد تقارير انضباطية رسمية ومسبوكة بصيغتي Word (.docx) و PDF جاهزة للطباعة والتوقيع</p>
         </div>
         """,
@@ -1269,7 +1415,7 @@ def render_report_tool():
     # --- قسم المعاينة الحية التفاعلية ---
     st.markdown("---")
     st.subheader("👁️ المعاينة الحية للتصميم والوثيقة الرسمية")
-    st.caption("يتحدث نموذج الوثيقة أوتوماتيكياً أسفله مع كل تغيير تقوم به في الاستمارة أعلاه:")
+    st.caption("يتحدث نموذج الوثيقة أوتوماتيكياً أسفله مع كل تغيير تقوم به في الاستمارة أو نوع الخط:")
 
     preview_html_code = render_live_preview_html(
         direction_val=direction_name, school_val=school_name, teacher_val=teacher_name,
@@ -1278,16 +1424,33 @@ def render_report_tool():
         room_val=room_number, report_title=current_config["title"],
         situations_list=selected_situations, custom_notes=custom_details,
         action_val=proposed_action, uploaded_logo_obj=uploaded_logo,
+        font_profile=active_font_profile,
     )
     st.markdown(preview_html_code, unsafe_allow_html=True)
 
-    # --- أزرار التوليد والتنزيل (Word & PDF) ---
-    st.markdown("---")
-    if st.button("🚀 توليد وتجهيز التقرير (Word & PDF)", type="primary"):
+    # --- شريط التحكم السفلي: تبديل الخط الطباعي + زر التوليد والطباعة جنباً إلى جنب ---
+    def reset_generated_files():
+        st.session_state.report_data_docx = None
+        st.session_state.report_data_pdf = None
+
+    col_font, col_btn = st.columns([1.25, 1])
+    with col_font:
+        st.selectbox(
+            "🖋️ نمط الخط الطباعي للوثيقة:",
+            options=font_options,
+            key="font_style_choice",
+            on_change=reset_generated_files,
+        )
+    with col_btn:
+        st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
+        generate_clicked = st.button("🚀 توليد وتجهيز التقرير (Word & PDF)", type="primary", use_container_width=True)
+
+    if generate_clicked:
         if not student_name.strip():
             st.warning("⚠️ يرجى إدخال اسم التلميذ(ة) لتوليد التقرير.")
         else:
             safe_name = student_name.strip().replace(" ", "_")
+            chosen_profile = FONT_PROFILES[st.session_state.font_style_choice]
             docx_bytes = generate_report_docx(
                 direction_val=direction_name, school_val=school_name, teacher_val=teacher_name,
                 year_val=school_year, student_val=student_name, class_val=class_level,
@@ -1295,6 +1458,7 @@ def render_report_tool():
                 room_val=room_number, report_title=current_config["title"],
                 situations_list=selected_situations, custom_notes=custom_details,
                 action_val=proposed_action, uploaded_logo_obj=uploaded_logo,
+                font_profile=chosen_profile,
             )
             st.session_state.report_data_docx = docx_bytes
             st.session_state.report_filename_docx = f"تقرير_{safe_name}.docx"
@@ -1306,12 +1470,13 @@ def render_report_tool():
                 room_val=room_number, report_title=current_config["title"],
                 situations_list=selected_situations, custom_notes=custom_details,
                 action_val=proposed_action, uploaded_logo_obj=uploaded_logo,
+                font_profile=chosen_profile,
             )
             st.session_state.report_data_pdf = pdf_bytes
             st.session_state.report_filename_pdf = f"تقرير_{safe_name}.pdf"
 
     if st.session_state.report_data_docx is not None:
-        st.success("✅ التقرير جاهز للتحميل!")
+        st.success("✅ التقرير جاهز للتحميل والطباعة!")
         col_dl1, col_dl2 = st.columns(2)
         with col_dl1:
             st.download_button(
@@ -1335,7 +1500,7 @@ def render_report_tool():
 
 
 # ==========================================
-# 8. التوجيه الرئيسي وتوصيل الأجزاء (Router)
+# 9. التوجيه الرئيسي وتوصيل الأجزاء (Router)
 # ==========================================
 
 if selected_tool == "📝 الترويسة المدرسية الذكية":
