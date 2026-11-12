@@ -11,6 +11,23 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Inches, Pt
 
+# مكتبات توليد PDF باللغة العربية
+try:
+    import arabic_reshaper
+    from bidi.algorithm import get_display
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    from reportlab.platypus import Image as RLImage
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
+    HAS_PDF_LIBS = True
+except ImportError:
+    HAS_PDF_LIBS = False
+
 
 # ==========================================
 # 1. الدوال المساعدة المشتركة (Utility Functions)
@@ -62,6 +79,35 @@ def get_logo_base64_src(uploaded_logo):
         except Exception:
             pass
     return get_static_logo_data_uri()
+
+
+def find_arabic_font():
+    """البحث عن خط عربي مثبت في النظام لتوليد PDF"""
+    candidates = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf",
+        "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+        "C:/Windows/Fonts/arial.ttf",
+        "C:/Windows/Fonts/tahoma.ttf",
+        "/System/Library/Fonts/Supplemental/Arial.ttf",
+    ]
+    for path in candidates:
+        if os.path.exists(path):
+            return path
+    if os.path.exists("/usr/share/fonts"):
+        for root, _, files in os.walk("/usr/share/fonts"):
+            for f in files:
+                if f.lower() in ["dejavusans.ttf", "notosansarabic-regular.ttf", "freesans.ttf"]:
+                    return os.path.join(root, f)
+    return None
+
+
+def shape_ar(text):
+    """تهيئة النص العربي للعرض الصحيح في PDF"""
+    if not HAS_PDF_LIBS:
+        return text
+    reshaped = arabic_reshaper.reshape(str(text))
+    return get_display(reshaped, base_dir="R")
 
 
 # ==========================================
@@ -251,6 +297,10 @@ if "report_data_docx" not in st.session_state:
     st.session_state.report_data_docx = None
 if "report_filename_docx" not in st.session_state:
     st.session_state.report_filename_docx = ""
+if "report_data_pdf" not in st.session_state:
+    st.session_state.report_data_pdf = None
+if "report_filename_pdf" not in st.session_state:
+    st.session_state.report_filename_pdf = ""
 
 # ==========================================
 # 5. القائمة الجانبية (Sidebar Navigation)
@@ -258,13 +308,13 @@ if "report_filename_docx" not in st.session_state:
 
 with st.sidebar:
     st.title("🛠️ المنصة التربوية")
-    
+
     selected_tool = st.radio(
         "اختر الأداة المطلوبة / Choisir l'outil:",
         ["📝 الترويسة المدرسية الذكية", "📋 محرر التقارير السريعة"],
         index=0,
     )
-    
+
     st.markdown("---")
     st.subheader("📌 نبذة عن المنصة")
     st.write(
@@ -277,7 +327,7 @@ with st.sidebar:
         """
         * 🚀 **أتمتة كاملة:** توفير الوقت والجهد في الهيكلة والتنسيق.
         * 👁️ **معاينة حية:** مشاهدة تفاعلية للمستند أثناء الكتابة.
-        * 📄 **تصدير محرر:** ملفات جاهزة للطباعة والتعديل بصيغة Word (`.docx`).
+        * 📄 **تصدير مزدوج:** تنزيل المستندات بصيغتي Word (`.docx`) و PDF (`.pdf`).
         """
     )
 
@@ -603,17 +653,17 @@ def generate_report_docx(
     logo_file = get_logo_bytes(uploaded_logo_obj)
 
     section = doc.sections[0]
-    section.top_margin = Inches(0.8)
-    section.bottom_margin = Inches(1.0)
+    section.top_margin = Inches(0.75)
+    section.bottom_margin = Inches(0.8)
     section.left_margin = Inches(0.8)
     section.right_margin = Inches(0.8)
-    section.header_distance = Inches(0.4)
-    section.footer_distance = Inches(0.4)
+    section.header_distance = Inches(0.35)
+    section.footer_distance = Inches(0.35)
 
     clear_and_prepare_headers(section)
     header = section.header
 
-    # جدول الترويسة الهيكلي بأبعاد دقيقة وتراصف منع الرجوع للسطر
+    # جدول الترويسة الهيكلي
     tbl = header.add_table(rows=1, cols=3, width=Inches(6.7))
     tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
     tblPr = tbl._tbl.tblPr
@@ -639,13 +689,11 @@ def generate_report_docx(
     s_name = school_val.strip() if school_val.strip() else "ثانوية أولاد داود التأهيلية"
     t_name = teacher_val.strip() if teacher_val.strip() else "عثمان شهير"
 
-    # الخلية اليمنى: المديرية والمؤسسة
     cell_r = row.cells[0]
     set_cell_rtl(cell_r)
     add_header_line_to_cell(cell_r, f"المديرية الإقليمية: {d_name}", is_arabic=True, align=WD_ALIGN_PARAGRAPH.RIGHT, is_first=True)
     add_header_line_to_cell(cell_r, s_name, is_arabic=True, align=WD_ALIGN_PARAGRAPH.RIGHT, is_first=False)
 
-    # الخلية الوسطى: الشعار
     cell_c = row.cells[1]
     set_cell_rtl(cell_c)
     p_c = cell_c.paragraphs[0]
@@ -658,7 +706,6 @@ def generate_report_docx(
         except Exception:
             pass
 
-    # الخلية اليسرى: الموسم والأستاذ
     cell_l = row.cells[2]
     set_cell_rtl(cell_l)
     add_header_line_to_cell(cell_l, f"الموسم الدراسي: {year_val}", is_arabic=True, align=WD_ALIGN_PARAGRAPH.LEFT, is_first=True)
@@ -671,8 +718,8 @@ def generate_report_docx(
     # عنوان التقرير
     p_title = doc.add_paragraph()
     p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    p_title.paragraph_format.space_before = Pt(12)
-    p_title.paragraph_format.space_after = Pt(14)
+    p_title.paragraph_format.space_before = Pt(10)
+    p_title.paragraph_format.space_after = Pt(12)
     r_title = add_styled_run(p_title, f"📋 {report_title}", is_arabic=True, font_size=15, bold=True)
     r_title.font.underline = True
 
@@ -718,7 +765,7 @@ def generate_report_docx(
     # الإجراء والخاتمة
     p_action = doc.add_paragraph()
     p_action.paragraph_format.space_before = Pt(10)
-    p_action.paragraph_format.space_after = Pt(12)
+    p_action.paragraph_format.space_after = Pt(16)
     p_action.paragraph_format.line_spacing = 1.25
     action_text = (
         f"ونظراً لما يقتضيه النظام الداخلي للمؤسسة وضماناً للسير العادي والدراسي للحصص، "
@@ -727,7 +774,7 @@ def generate_report_docx(
     )
     add_styled_run(p_action, action_text, is_arabic=True, font_size=12, bold=False)
 
-    # 1. التواقيع داخل جسم الصفحة (Document Body)
+    # 1. التواقيع داخل جسم الصفحة مع مساحة كافية وأسطر منقطة لرأي الإدارة
     sig_tbl = doc.add_table(rows=1, cols=2, width=Inches(6.7))
     sig_tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
     sig_tblPr = sig_tbl._tbl.tblPr
@@ -740,17 +787,32 @@ def generate_report_docx(
         sigBorders.append(b)
     sig_tblPr.append(sigBorders)
 
+    # العمود الأيمن: توقيع الأستاذ + مساحة بيضاء كافية للتوقيع
     cell_sig_r = sig_tbl.rows[0].cells[0]
+    cell_sig_r.width = Inches(3.2)
+    cell_sig_r.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.TOP
     set_cell_rtl(cell_sig_r)
     p_sig_r = cell_sig_r.paragraphs[0]
     p_sig_r.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-    add_styled_run(p_sig_r, "توقيع الأستاذ(ة):", is_arabic=True, font_size=11, bold=True)
+    p_sig_r.paragraph_format.space_after = Pt(75)
+    add_styled_run(p_sig_r, "توقيع الأستاذ(ة):", is_arabic=True, font_size=11.5, bold=True)
 
+    # العمود الأيسر: رأي وتوقيع الإدارة التربوية + أسطر منقطة للتدوين
     cell_sig_l = sig_tbl.rows[0].cells[1]
+    cell_sig_l.width = Inches(3.5)
+    cell_sig_l.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.TOP
     set_cell_rtl(cell_sig_l)
     p_sig_l = cell_sig_l.paragraphs[0]
-    p_sig_l.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    add_styled_run(p_sig_l, "رأي وتوقيع الإدارة التربوية:", is_arabic=True, font_size=11, bold=True)
+    p_sig_l.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    p_sig_l.paragraph_format.space_after = Pt(8)
+    add_styled_run(p_sig_l, "رأي وتوقيع الإدارة التربوية:", is_arabic=True, font_size=11.5, bold=True)
+
+    for idx in range(3):
+        p_dots = cell_sig_l.add_paragraph()
+        p_dots.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+        p_dots.paragraph_format.space_before = Pt(4)
+        p_dots.paragraph_format.space_after = Pt(28 if idx == 2 else 6)
+        add_styled_run(p_dots, "...........................................................", is_arabic=True, font_size=11, bold=False)
 
     # 2. تذييل الصفحات الرسمي (Pied de page): اسم الأستاذ والتاريخ فقط
     clear_all_footers_completely(section)
@@ -776,12 +838,160 @@ def generate_report_docx(
     return output
 
 
+def generate_report_pdf(
+    direction_val, school_val, teacher_val, year_val, student_val, class_val,
+    subject_val, date_val, time_val, room_val, report_title, situations_list,
+    custom_notes, action_val, uploaded_logo_obj
+):
+    """توليد نسخة PDF رسمية باللغة العربية جاهزة للطباعة"""
+    if not HAS_PDF_LIBS:
+        return None
+    font_path = find_arabic_font()
+    if not font_path:
+        return None
+
+    try:
+        pdfmetrics.registerFont(TTFont("ArabicFont", font_path))
+    except Exception:
+        return None
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=45,
+        leftMargin=45,
+        topMargin=38,
+        bottomMargin=38,
+    )
+
+    style_right = ParagraphStyle("ArRight", fontName="ArabicFont", fontSize=11.5, leading=18, alignment=TA_RIGHT)
+    style_title = ParagraphStyle("ArTitle", fontName="ArabicFont", fontSize=14, leading=20, alignment=TA_CENTER)
+    style_hdr_r = ParagraphStyle("ArHdrR", fontName="ArabicFont", fontSize=9.5, leading=14, alignment=TA_RIGHT)
+    style_hdr_l = ParagraphStyle("ArHdrL", fontName="ArabicFont", fontSize=9.5, leading=14, alignment=TA_LEFT)
+    style_foot_r = ParagraphStyle("ArFootR", fontName="ArabicFont", fontSize=8.5, leading=12, alignment=TA_RIGHT, textColor=colors.grey)
+    style_foot_l = ParagraphStyle("ArFootL", fontName="ArabicFont", fontSize=8.5, leading=12, alignment=TA_LEFT, textColor=colors.grey)
+
+    d_name = direction_val.strip() if direction_val.strip() else "تاونات"
+    s_name = school_val.strip() if school_val.strip() else "ثانوية أولاد داود التأهيلية"
+    t_name = teacher_val.strip() if teacher_val.strip() else "عثمان شهير"
+    student_str = student_val.strip() if student_val.strip() else "............................"
+    class_str = class_val.strip() if class_val.strip() else "...................."
+    time_str = time_val.strip() if time_val.strip() else "...................."
+    room_str = room_val.strip() if room_val.strip() else "...................."
+    date_str = date_val.strftime("%Y/%m/%d")
+
+    story = []
+
+    # 1. الترويسة
+    logo_file = get_logo_bytes(uploaded_logo_obj)
+    logo_cell = ""
+    if logo_file:
+        try:
+            if isinstance(logo_file, io.BytesIO):
+                logo_file.seek(0)
+            logo_cell = RLImage(logo_file, width=65, height=48, kind="proportional")
+        except Exception:
+            logo_cell = ""
+
+    hdr_data = [[
+        Paragraph(f"{shape_ar(f'الموسم الدراسي: {year_val}')}<br/>{shape_ar(f'الأستاذ(ة): {t_name}')}", style_hdr_l),
+        logo_cell,
+        Paragraph(f"{shape_ar(f'المديرية الإقليمية: {d_name}')}<br/>{shape_ar(s_name)}", style_hdr_r),
+    ]]
+    hdr_table = Table(hdr_data, colWidths=[200, 105, 200])
+    hdr_table.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("ALIGN", (1, 0), (1, 0), "CENTER"),
+        ("LINEBELOW", (0, 0), (-1, 0), 1.2, colors.HexColor("#334155")),
+        ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
+    ]))
+    story.append(hdr_table)
+    story.append(Spacer(1, 16))
+
+    # 2. العنوان
+    story.append(Paragraph(f"<u>{shape_ar(report_title)}</u>", style_title))
+    story.append(Spacer(1, 16))
+
+    # 3. الديباجة
+    story.append(Paragraph(shape_ar("سلام تام بوجود مولانا الإمام، وبعد؛"), style_right))
+    story.append(Spacer(1, 10))
+
+    intro = (
+        f"يشرفني أن أرفع إلى علم السيد مدير المؤسسة هذا التقرير المتعلق بالسلوك الصادر عن التلميذ(ة): "
+        f"« {student_str} »، المتمدرس(ة) بالقسم: « {class_str} »، وذلك خلال حصة مادة « {subject_val} » "
+        f"بتاريخ: {date_str} (التوقيت: {time_str} / {room_str})."
+    )
+    story.append(Paragraph(shape_ar(intro), style_right))
+    story.append(Spacer(1, 12))
+
+    # 4. الوقائع
+    story.append(Paragraph(shape_ar("وقائع وتفاصيل المخالفة الملاحظة:"), style_right))
+    story.append(Spacer(1, 6))
+    for sit in situations_list:
+        story.append(Paragraph(shape_ar(f"• {sit}"), style_right))
+        story.append(Spacer(1, 4))
+
+    if custom_notes.strip():
+        story.append(Spacer(1, 4))
+        story.append(Paragraph(shape_ar(f"ملاحظات إضافية: {custom_notes.strip()}"), style_right))
+
+    story.append(Spacer(1, 12))
+
+    # 5. الإجراء والخاتمة
+    closing = (
+        f"ونظراً لما يقتضيه النظام الداخلي للمؤسسة وضماناً للسير العادي والدراسي للحصص، "
+        f"أقترح عليكم: {action_val}."
+    )
+    story.append(Paragraph(shape_ar(closing), style_right))
+    story.append(Spacer(1, 10))
+    story.append(Paragraph(shape_ar("وتقبلوا فائق التقدير والاحترام."), style_right))
+    story.append(Spacer(1, 22))
+
+    # 6. التواقيع ومساحة رأي الإدارة بالنقط
+    admin_col = (
+        f"{shape_ar('رأي وتوقيع الإدارة التربوية:')}<br/><br/>"
+        f"..................................................<br/><br/>"
+        f"..................................................<br/><br/>"
+        f".................................................."
+    )
+    teacher_col = f"{shape_ar('توقيع الأستاذ(ة):')}"
+
+    sig_data = [[
+        Paragraph(admin_col, style_right),
+        Paragraph(teacher_col, style_right),
+    ]]
+    sig_table = Table(sig_data, colWidths=[260, 245])
+    sig_table.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 45),
+    ]))
+    story.append(sig_table)
+    story.append(Spacer(1, 20))
+
+    # 7. التذييل السفلي
+    foot_data = [[
+        Paragraph(shape_ar(f"حرر في: {date_str}"), style_foot_l),
+        Paragraph(shape_ar(f"الأستاذ(ة): {t_name}"), style_foot_r),
+    ]]
+    foot_table = Table(foot_data, colWidths=[252, 253])
+    foot_table.setStyle(TableStyle([
+        ("LINEABOVE", (0, 0), (-1, 0), 0.6, colors.lightgrey),
+        ("TOPPADDING", (0, 0), (-1, 0), 6),
+    ]))
+    story.append(foot_table)
+
+    doc.build(story)
+    buffer.seek(0)
+    return buffer
+
+
 def render_live_preview_html(
     direction_val, school_val, teacher_val, year_val, student_val, class_val,
     subject_val, date_val, time_val, room_val, report_title, situations_list,
     custom_notes, action_val, uploaded_logo_obj
 ):
-    """توليد المعاينة الحية التفاعلية مع منع انكسار أرقام الموسم الدراسي ونقل التواقيع لجسم الصفحة"""
+    """توليد المعاينة الحية التفاعلية مع مساحة كافية للتوقيع وأسطر منقطة لرأي الإدارة"""
     logo_src = get_logo_base64_src(uploaded_logo_obj)
     logo_html = f'<img src="{logo_src}" style="max-height: 48px; max-width: 90px; height: auto; width: auto; object-fit: contain;" />' if logo_src else ''
 
@@ -826,17 +1036,24 @@ def render_live_preview_html(
 {bullets_html}
 </ul>
 {custom_html}
-<p style="line-height: 1.7; font-size: clamp(0.85rem, 2.8vw, 0.95rem); margin-top: 14px; margin-bottom: 25px; word-break: break-word;">
+<p style="line-height: 1.7; font-size: clamp(0.85rem, 2.8vw, 0.95rem); margin-top: 14px; margin-bottom: 20px; word-break: break-word;">
 ونظراً لما يقتضيه النظام الداخلي للمؤسسة وضماناً للسير العادي والدراسي للحصص، أقترح عليكم: <b>{action_val}</b>.<br><br>
 وتقبلوا فائق التقدير والاحترام.
 </p>
-<!-- التواقيع داخل جسم الصفحة -->
-<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-top: 30px; padding-top: 10px; font-size: clamp(0.75rem, 2.5vw, 0.9rem); font-weight: bold;">
-<div>توقيع الأستاذ(ة)</div>
-<div>رأي وتوقيع الإدارة التربوية</div>
+<div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-top: 25px; margin-bottom: 70px; padding-top: 10px; font-size: clamp(0.75rem, 2.5vw, 0.9rem);">
+<div style="width: 45%; text-align: right; font-weight: bold;">
+<div>توقيع الأستاذ(ة):</div>
 </div>
-<!-- تذييل الصفحة الرسمي (اسم الأستاذ والتاريخ فقط) -->
-<div style="display: flex; justify-content: space-between; align-items: center; margin-top: 25px; border-top: 1px dashed #cbd5e1; padding-top: 8px; font-size: clamp(0.65rem, 2.2vw, 0.78rem); color: #64748b;">
+<div style="width: 50%; text-align: right;">
+<div style="font-weight: bold; margin-bottom: 8px;">رأي وتوقيع الإدارة التربوية:</div>
+<div style="color: #64748b; line-height: 1.9; font-size: clamp(0.70rem, 2.2vw, 0.85rem); overflow: hidden; white-space: nowrap;">
+....................................................<br>
+....................................................<br>
+....................................................
+</div>
+</div>
+</div>
+<div style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px; border-top: 1px dashed #cbd5e1; padding-top: 8px; font-size: clamp(0.65rem, 2.2vw, 0.78rem); color: #64748b;">
 <div>الأستاذ(ة): {t_name}</div>
 <div>حرر في: {date_str}</div>
 </div>
@@ -849,7 +1066,7 @@ def render_report_tool():
         """
         <div style="text-align: center; padding: 15px; border-radius: 10px; background-color: #ffffff; border: 1px solid #e2e8f0; margin-bottom: 20px;">
             <h1 style="color: #1e293b; margin: 0; font-size: 1.6rem;">📝 محرر التقارير السريعة</h1>
-            <p style="color: #64748b; margin-top: 5px; font-size: 0.95rem;">توليد تقارير انضباطية رسمية ومسبوكة بصيغة Word (.docx) جاهزة للطباعة والتوقيع</p>
+            <p style="color: #64748b; margin-top: 5px; font-size: 0.95rem;">توليد تقارير انضباطية رسمية ومسبوكة بصيغتي Word (.docx) و PDF جاهزة للطباعة والتوقيع</p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -878,7 +1095,6 @@ def render_report_tool():
     with col_s3:
         subject_name = st.text_input("المادة الدراسية:", value="الرياضيات")
 
-    # احتساب التاريخ أوتوماتيكياً بدون حقل إدخال يدوي
     incident_date = datetime.date.today()
 
     col_t1, col_t2 = st.columns(2)
@@ -926,12 +1142,13 @@ def render_report_tool():
     )
     st.markdown(preview_html_code, unsafe_allow_html=True)
 
-    # --- أزرار التوليد والتنزيل ---
+    # --- أزرار التوليد والتنزيل (Word & PDF) ---
     st.markdown("---")
-    if st.button("🚀 توليد وتجهيز التقرير (Word)", type="primary"):
+    if st.button("🚀 توليد وتجهيز التقرير (Word & PDF)", type="primary"):
         if not student_name.strip():
             st.warning("⚠️ يرجى إدخال اسم التلميذ(ة) لتوليد التقرير.")
         else:
+            safe_name = student_name.strip().replace(" ", "_")
             docx_bytes = generate_report_docx(
                 direction_val=direction_name, school_val=school_name, teacher_val=teacher_name,
                 year_val=school_year, student_val=student_name, class_val=class_level,
@@ -941,18 +1158,41 @@ def render_report_tool():
                 action_val=proposed_action, uploaded_logo_obj=uploaded_logo,
             )
             st.session_state.report_data_docx = docx_bytes
-            safe_name = student_name.strip().replace(" ", "_")
             st.session_state.report_filename_docx = f"تقرير_{safe_name}.docx"
 
+            pdf_bytes = generate_report_pdf(
+                direction_val=direction_name, school_val=school_name, teacher_val=teacher_name,
+                year_val=school_year, student_val=student_name, class_val=class_level,
+                subject_val=subject_name, date_val=incident_date, time_val=incident_time,
+                room_val=room_number, report_title=current_config["title"],
+                situations_list=selected_situations, custom_notes=custom_details,
+                action_val=proposed_action, uploaded_logo_obj=uploaded_logo,
+            )
+            st.session_state.report_data_pdf = pdf_bytes
+            st.session_state.report_filename_pdf = f"تقرير_{safe_name}.pdf"
+
     if st.session_state.report_data_docx is not None:
-        st.success("✅ المستند جاهز للتحميل والطباعة!")
-        st.download_button(
-            label="📥 تحميل التقرير الجاهز بصيغة (.docx)",
-            data=st.session_state.report_data_docx,
-            file_name=st.session_state.report_filename_docx,
-            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            use_container_width=True,
-        )
+        st.success("✅ التقرير جاهز للتحميل بصيغتي Word و PDF!")
+        col_dl1, col_dl2 = st.columns(2)
+        with col_dl1:
+            st.download_button(
+                label="📥 تحميل بصيغة Word (.docx)",
+                data=st.session_state.report_data_docx,
+                file_name=st.session_state.report_filename_docx,
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                use_container_width=True,
+            )
+        with col_dl2:
+            if st.session_state.report_data_pdf is not None:
+                st.download_button(
+                    label="📕 تحميل بصيغة PDF (.pdf)",
+                    data=st.session_state.report_data_pdf,
+                    file_name=st.session_state.report_filename_pdf,
+                    mime="application/pdf",
+                    use_container_width=True,
+                )
+            else:
+                st.info("ℹ️ لتفعيل تنزيل PDF المباشر، أضف `reportlab` و `arabic-reshaper` و `python-bidi` إلى ملف `requirements.txt` في GitHub.")
 
 
 # ==========================================
