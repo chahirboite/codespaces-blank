@@ -44,6 +44,17 @@ def get_auto_school_year():
         return f"{current_year}-{current_year + 1}"
 
 
+def format_room_label(room_val, is_preview=False):
+    """تنسيق رقم القاعة تلقائياً عند إدخال الرقم مباشرة"""
+    r = room_val.strip()
+    if not r:
+        return "[القاعة]" if is_preview else "القاعة ........"
+    prefixes = ("القاعة", "قاعة", "مختبر", "المختبر", "ورشة", "الورشة", "ق.")
+    if r.startswith(prefixes):
+        return r
+    return f"القاعة {r}"
+
+
 def get_static_logo_data_uri():
     """قراءة الشعار المحلي خلف العنوان"""
     for filename in ["logo.jpg", "logo.png", "logo.jpeg", "LOGO.JPG", "LOGO.PNG"]:
@@ -693,8 +704,9 @@ def build_report_texts(student_val, class_val, subject_val, date_val, time_val, 
     """بناء نصوص التقرير بصياغة إدارية وتربوية رسمية موحدة"""
     student_str = student_val.strip() if student_val.strip() else "............................................"
     class_str = class_val.strip() if class_val.strip() else "......................"
+    subj_str = subject_val.strip() if subject_val.strip() else "......................"
     time_str = time_val.strip() if time_val.strip() else "......................"
-    room_str = room_val.strip() if room_val.strip() else "......................"
+    room_str = format_room_label(room_val, is_preview=False)
     date_str = date_val.strftime("%Y/%m/%d")
     action_str = action_val.strip() if action_val.strip() else "اتخاذ المتعين وفق مقتضيات النظام الداخلي للمؤسسة"
 
@@ -703,7 +715,7 @@ def build_report_texts(student_val, class_val, subject_val, date_val, time_val, 
     intro_text = (
         f"يشرفني، السيد المدير المحترم، أن أرفع إلى كريم علمكم هذا التقرير التربوي قصد الإخبار واتخاذ ما ترونه مناسباً، "
         f"في شأن التصرفات غير المنضبطة الصادرة عن التلميذ(ة): « {student_str} »، المتمدرس(ة) بالقسم: « {class_str} »، "
-        f"وذلك خلال حصة مادة « {subject_val} » المنعقدة بتاريخ {date_str} (التوقيت: {time_str} / {room_str})."
+        f"وذلك خلال حصة مادة « {subj_str} » المنعقدة بتاريخ {date_str} (التوقيت: {time_str} / {room_str})."
     )
 
     section_heading = "حيثيات الواقعة والأفعال المنسوبة للتلميذ(ة):"
@@ -770,9 +782,9 @@ def generate_report_docx(
         cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
         set_cell_no_wrap(cell)
 
-    d_name = direction_val.strip() if direction_val.strip() else "تاونات"
-    s_name = school_val.strip() if school_val.strip() else "ثانوية أولاد داود التأهيلية"
-    t_name = teacher_val.strip() if teacher_val.strip() else "عثمان شهير"
+    d_name = direction_val.strip() if direction_val.strip() else "........................"
+    s_name = school_val.strip() if school_val.strip() else "...................................."
+    t_name = teacher_val.strip() if teacher_val.strip() else "........................"
 
     cell_r = row.cells[0]
     set_cell_rtl(cell_r)
@@ -964,9 +976,9 @@ def generate_report_pdf(
     style_foot_r = ParagraphStyle("ArFootR", fontName="ArabicFont", fontSize=8.5, leading=12, alignment=TA_RIGHT, textColor=colors.grey)
     style_foot_l = ParagraphStyle("ArFootL", fontName="ArabicFont", fontSize=8.5, leading=12, alignment=TA_LEFT, textColor=colors.grey)
 
-    d_name = direction_val.strip() if direction_val.strip() else "تاونات"
-    s_name = school_val.strip() if school_val.strip() else "ثانوية أولاد داود التأهيلية"
-    t_name = teacher_val.strip() if teacher_val.strip() else "عثمان شهير"
+    d_name = direction_val.strip() if direction_val.strip() else "........................"
+    s_name = school_val.strip() if school_val.strip() else "...................................."
+    t_name = teacher_val.strip() if teacher_val.strip() else "........................"
 
     texts = build_report_texts(
         student_val, class_val, subject_val, date_val, time_val, room_val, custom_notes, action_val
@@ -1084,14 +1096,18 @@ def render_live_preview_html(
     logo_src = get_logo_base64_src(uploaded_logo_obj)
     logo_html = f'<img src="{logo_src}" style="max-height: 48px; max-width: 90px; height: auto; width: auto; object-fit: contain;" />' if logo_src else ''
 
-    d_name = direction_val.strip() if direction_val.strip() else "تاونات"
-    s_name = school_val.strip() if school_val.strip() else "ثانوية أولاد داود التأهيلية"
-    t_name = teacher_val.strip() if teacher_val.strip() else "عثمان شهير"
+    d_name = direction_val.strip() if direction_val.strip() else "<span style='color:#94a3b8;'>[المديرية الإقليمية]</span>"
+    s_name = school_val.strip() if school_val.strip() else "<span style='color:#94a3b8;'>[المؤسسة التعليمية]</span>"
+    t_name = teacher_val.strip() if teacher_val.strip() else "<span style='color:#94a3b8;'>[اسم الأستاذ(ة)]</span>"
 
     student_disp = student_val.strip() if student_val.strip() else "<span style='color:#94a3b8;'>[اسم التلميذ(ة)]</span>"
     class_disp = class_val.strip() if class_val.strip() else "<span style='color:#94a3b8;'>[المستوى]</span>"
-    time_disp = time_val.strip() if time_val.strip() else "[التوقيت]"
-    room_disp = room_val.strip() if room_val.strip() else "[القاعة]"
+    subj_disp = subject_val.strip() if subject_val.strip() else "<span style='color:#94a3b8;'>[المادة]</span>"
+    time_disp = time_val.strip() if time_val.strip() else "<span style='color:#94a3b8;'>[التوقيت]</span>"
+    room_disp = format_room_label(room_val, is_preview=True)
+    if not room_val.strip():
+        room_disp = f"<span style='color:#94a3b8;'>{room_disp}</span>"
+
     date_str = date_val.strftime("%Y/%m/%d")
     action_disp = action_val.strip() if action_val.strip() else "اتخاذ المتعين وفق مقتضيات النظام الداخلي للمؤسسة"
 
@@ -1121,7 +1137,7 @@ def render_live_preview_html(
 <p style="line-height: 1.75; text-align: justify; font-size: clamp(0.83rem, 2.7vw, 0.94rem); margin-bottom: 12px; word-break: break-word;">
 يشرفني، السيد المدير المحترم، أن أرفع إلى كريم علمكم هذا التقرير التربوي قصد الإخبار واتخاذ ما ترونه مناسباً، 
 في شأن التصرفات غير المنضبطة الصادرة عن التلميذ(ة): <b>« {student_disp} »</b>، المتمدرس(ة) بالقسم: <b>« {class_disp} »</b>، 
-وذلك خلال حصة مادة <b>« {subject_val} »</b> المنعقدة بتاريخ <b>{date_str}</b> (التوقيت: {time_disp} / {room_disp}).
+وذلك خلال حصة مادة <b>« {subj_disp} »</b> المنعقدة بتاريخ <b>{date_str}</b> (التوقيت: {time_disp} / {room_disp}).
 </p>
 <div style="font-weight: bold; font-size: clamp(0.83rem, 2.7vw, 0.94rem); margin-top: 10px; margin-bottom: 6px;">حيثيات الواقعة والأفعال المنسوبة للتلميذ(ة):</div>
 <ul style="padding-right: 20px; font-size: clamp(0.80rem, 2.6vw, 0.90rem); line-height: 1.65; margin-top: 4px; margin-bottom: 10px;">
@@ -1171,11 +1187,11 @@ def render_report_tool():
     st.subheader("1️⃣ البيانات العامة والترويسة")
     col_g1, col_g2 = st.columns(2)
     with col_g1:
-        direction_name = st.text_input("المديرية الإقليمية:", value="تاونات")
+        direction_name = st.text_input("المديرية الإقليمية:", value="", placeholder="مثال: تاونات")
     with col_g2:
-        school_name = st.text_input("المؤسسة التعليمية:", value="ثانوية أولاد داود التأهيلية")
+        school_name = st.text_input("المؤسسة التعليمية:", value="", placeholder="مثال: ثانوية أولاد داود التأهيلية")
 
-    teacher_name = st.text_input("اسم الأستاذ(ة):", value="عثمان شهير")
+    teacher_name = st.text_input("اسم الأستاذ(ة):", value="", placeholder="مثال: عثمان شهير")
     school_year = get_auto_school_year()
 
     uploaded_logo = st.file_uploader(
@@ -1186,19 +1202,19 @@ def render_report_tool():
     st.subheader("2️⃣ بيانات التلميذ والواقعة")
     col_s1, col_s2, col_s3 = st.columns(3)
     with col_s1:
-        student_name = st.text_input("اسم التلميذ(ة):", placeholder="مثال: محمد العلمي")
+        student_name = st.text_input("اسم التلميذ(ة):", value="", placeholder="مثال: محمد العلمي")
     with col_s2:
-        class_level = st.text_input("القسم / المستوى:", placeholder="مثال: الثانية بكالوريا علوم فيزيائية 1")
+        class_level = st.text_input("القسم / المستوى:", value="", placeholder="مثال: الثانية بكالوريا علوم فيزيائية 1")
     with col_s3:
-        subject_name = st.text_input("المادة الدراسية:", value="الرياضيات")
+        subject_name = st.text_input("المادة الدراسية:", value="", placeholder="مثال: الرياضيات")
 
     incident_date = datetime.date.today()
 
     col_t1, col_t2 = st.columns(2)
     with col_t1:
-        incident_time = st.text_input("توقيت الحصة:", placeholder="مثال: من 10:00 إلى 11:00")
+        incident_time = st.text_input("توقيت الحصة:", value="", placeholder="مثال: من 10:00 إلى 11:00")
     with col_t2:
-        room_number = st.text_input("رقم القاعة / المختبر:", value="القاعة 4")
+        room_number = st.text_input("رقم القاعة:", value="", placeholder="مثال: 4 (يكفي كتابة الرقم مباشرة)")
 
     st.subheader("3️⃣ تحديد نوع التقرير والمخالفات")
     selected_type_key = st.radio(
