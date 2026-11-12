@@ -243,7 +243,7 @@ def add_header_line_to_cell(cell, text, is_arabic, align, is_first=False):
 
 
 # ==========================================
-# 3. قوائم وثوابت الخيارات (بصياغة إدارية وتربوية رصينة)
+# 3. قوائم وثوابت الخيارات (بصياغة إدارية وتراتبية)
 # ==========================================
 
 LEVELS_AR = [
@@ -278,6 +278,18 @@ LEVELS_FR = [
     "Autre niveau...",
 ]
 
+# قائمة الإجراءات التأديبية والإدارية مرتبة تراتبياً من الأخف إلى الأشد
+GRADED_ACTIONS_MAP = {
+    "1️⃣ تنبيه تربوي: توجيه تنبيه شفوي والتذكير بالانضباط": "توجيه تنبيه تربوي شفوي وتذكير المعني(ة) بالأمر بضرورة الالتزام بالانضباط الصفي",
+    "2️⃣ إنذار كتابي: توجيه إنذار مع توقيع التزام خطي": "توجيه إنذار كتابي مع إلزام التلميذ(ة) بتوقيع التزام خطي بعدم تكرار المخالفة",
+    "3️⃣ توبيخ إداري: توجيه توبيخ وإشعار ولي الأمر": "توجيه توبيخ إداري وإشعار ولي الأمر رسمياً بالسلوك المسجل",
+    "4️⃣ استدعاء ولي الأمر: الحضور للإدارة وتوقيع تعهد": "استدعاء ولي أمر التلميذ(ة) للحضور الفوري إلى الإدارة التربوية قصد التدارس وتوقيع تعهد",
+    "5️⃣ مواكبة تربوية: الإحالة على خلية الإنصات / التوجيه": "إحالة التلميذ(ة) على خلية الإنصات والوساطة التربوية أو مستشار التوجيه للمواكبة",
+    "6️⃣ مجلس الانضباط: عرض الملف لاتخاذ المتعين": "عرض ملف التلميذ(ة) على أنظار مجلس الانضباط لاتخاذ العقوبات التأديبية المناسبة",
+    "7️⃣ توقيف مؤقت: تطبيق مقتضيات النظام الداخلي": "تطبيق عقوبة التوقيف المؤقت عن الدراسة وفق ما ينص عليه النظام الداخلي للمؤسسة",
+    "✍️ تحرير إجراء مخصص يدوياً...": "",
+}
+
 REPORT_TYPES = {
     "1️⃣ تقرير حول الإخلال بالنظام وعرقلة الدرس": {
         "title": "تقرير تربوي حول الإخلال بالنظام العام وعرقلة السير العادي للحصة الدراسية",
@@ -287,7 +299,7 @@ REPORT_TYPES = {
             "التمادي في مخالفة التوجيهات التربوية وعدم الامتثال لتنبيهات الأستاذ المتكررة.",
             "الاستعمال غير المشروع للهاتف النقال / الأجهزة الإلكترونية داخل الفصل الدراسي في خرق سافر لمقتضيات النظام الداخلي للمؤسسة.",
         ],
-        "default_action": "استدعاء ولي أمر التلميذ(ة) وإحالة الملف على أنظار مجلس الانضباط لاتخاذ المتعين",
+        "default_action_key": "4️⃣ استدعاء ولي الأمر: الحضور للإدارة وتوقيع تعهد",
     },
     "2️⃣ تقرير حول السلوك غير اللائق والامتناع عن العمل": {
         "title": "تقرير إداري وتربوي حول سلوك غير لائق والامتناع عن أداء الواجبات الصفية",
@@ -297,7 +309,7 @@ REPORT_TYPES = {
             "إلحاق أضرار مادية بتجهيزات القاعة الدراسية والعبث بممتلكات المؤسسة.",
             "مغادرة القاعة الدراسية بصفة أحادية ودون الحصول على إذن مسبق من الأستاذ.",
         ],
-        "default_action": "عرض حالة التلميذ(ة) على مجلس الانضباط وتطبيق مقتضيات النظام الداخلي للمؤسسة",
+        "default_action_key": "6️⃣ مجلس الانضباط: عرض الملف لاتخاذ المتعين",
     },
     "3️⃣ تقرير حول التمادي في التأخر والغياب غير المبرر": {
         "title": "تقرير حول التمادي في التأخر والتغيب غير المبرر عن الحصص الدراسية",
@@ -306,7 +318,7 @@ REPORT_TYPES = {
             "التغيب المستمر بدون عذر مقبول عن حصص المادة، مع التهاون في تتبع الدروس.",
             "الامتناع عن الإدلاء بورقة السماح بالدخول المسلمة من لدن الإدارة التربوية عقب الغياب.",
         ],
-        "default_action": "إشعار ولي الأمر رسمياً واتخاذ الإجراءات الإدارية الجاري بها العمل في شأن المواظبة",
+        "default_action_key": "3️⃣ توبيخ إداري: توجيه توبيخ وإشعار ولي الأمر",
     },
 }
 
@@ -684,6 +696,7 @@ def build_report_texts(student_val, class_val, subject_val, date_val, time_val, 
     time_str = time_val.strip() if time_val.strip() else "......................"
     room_str = room_val.strip() if room_val.strip() else "......................"
     date_str = date_val.strftime("%Y/%m/%d")
+    action_str = action_val.strip() if action_val.strip() else "اتخاذ المتعين وفق مقتضيات النظام الداخلي للمؤسسة"
 
     salutation = "سلام تام بوجود مولانا الإمام المؤيد بالله، وبعد؛"
 
@@ -699,7 +712,7 @@ def build_report_texts(student_val, class_val, subject_val, date_val, time_val, 
 
     closing_body = (
         f"وحرصاً منا على صون حرمة الفضاء التربوي، وتكريس مبادئ الانضباط والمسؤولية المنصوص عليها في النظام الداخلي للمؤسسة، "
-        f"ألتمس من سيادتكم التدخل لاتخاذ الإجراءات التربوية والإدارية اللازمة في حق المعني(ة) بالأمر، ولا سيما: {action_val}."
+        f"ألتمس من سيادتكم التدخل لاتخاذ الإجراءات التربوية والإدارية اللازمة في حق المعني(ة) بالأمر، ولا سيما: {action_str}."
     )
 
     closing_salutation = "وتفضلوا، السيد المدير المحترم، بقبول أسمى عبارات التقدير والاحترام.\nوالسلام."
@@ -712,6 +725,7 @@ def build_report_texts(student_val, class_val, subject_val, date_val, time_val, 
         "closing_body": closing_body,
         "closing_salutation": closing_salutation,
         "date_str": date_str,
+        "action_str": action_str,
     }
 
 
@@ -1079,6 +1093,7 @@ def render_live_preview_html(
     time_disp = time_val.strip() if time_val.strip() else "[التوقيت]"
     room_disp = room_val.strip() if room_val.strip() else "[القاعة]"
     date_str = date_val.strftime("%Y/%m/%d")
+    action_disp = action_val.strip() if action_val.strip() else "اتخاذ المتعين وفق مقتضيات النظام الداخلي للمؤسسة"
 
     bullets_html = "".join([f"<li style='margin-bottom: 5px; text-align: justify;'>{s}</li>" for s in situations_list])
     custom_html = f"<p style='margin-top: 6px; font-weight: 500; text-align: justify;'><b>معطيات وملاحظات تكميلية:</b> {custom_notes.strip()}</p>" if custom_notes.strip() else ""
@@ -1115,7 +1130,7 @@ def render_live_preview_html(
 {custom_html}
 <p style="line-height: 1.75; text-align: justify; font-size: clamp(0.83rem, 2.7vw, 0.94rem); margin-top: 14px; margin-bottom: 10px; word-break: break-word;">
 وحرصاً منا على صون حرمة الفضاء التربوي، وتكريس مبادئ الانضباط والمسؤولية المنصوص عليها في النظام الداخلي للمؤسسة، 
-ألتمس من سيادتكم التدخل لاتخاذ الإجراءات التربوية والإدارية اللازمة في حق المعني(ة) بالأمر، ولا سيما: <b>{action_val}</b>.
+ألتمس من سيادتكم التدخل لاتخاذ الإجراءات التربوية والإدارية اللازمة في حق المعني(ة) بالأمر، ولا سيما: <b>{action_disp}</b>.
 </p>
 <div style="text-align: center; font-size: clamp(0.83rem, 2.7vw, 0.94rem); line-height: 1.6; margin-top: 8px; margin-bottom: 20px;">
 وتفضلوا، السيد المدير المحترم، بقبول أسمى عبارات التقدير والاحترام.<br>
@@ -1157,10 +1172,11 @@ def render_report_tool():
     col_g1, col_g2 = st.columns(2)
     with col_g1:
         direction_name = st.text_input("المديرية الإقليمية:", value="تاونات")
-        school_name = st.text_input("المؤسسة التعليمية:", value="ثانوية أولاد داود التأهيلية")
     with col_g2:
-        teacher_name = st.text_input("اسم الأستاذ(ة):", value="عثمان شهير")
-        school_year = st.text_input("الموسم الدراسي:", value=get_auto_school_year())
+        school_name = st.text_input("المؤسسة التعليمية:", value="ثانوية أولاد داود التأهيلية")
+
+    teacher_name = st.text_input("اسم الأستاذ(ة):", value="عثمان شهير")
+    school_year = get_auto_school_year()
 
     uploaded_logo = st.file_uploader(
         "🖼️ رفع شعار المؤسسة الخاص (اختياري - يحل محل الشعار الافتراضي):",
@@ -1203,9 +1219,35 @@ def render_report_tool():
         placeholder="أدخل أي معلومات تفصيلية إضافية توضح ملابسات الواقعة...",
     )
 
+    # تهيئة ومزامنة قائمة الإجراءات المتدرجة مع خانة التحرير اليدوي
+    if "last_report_type" not in st.session_state:
+        st.session_state.last_report_type = selected_type_key
+    if "selected_action_option" not in st.session_state:
+        st.session_state.selected_action_option = current_config["default_action_key"]
+    if "proposed_action_text" not in st.session_state:
+        st.session_state.proposed_action_text = GRADED_ACTIONS_MAP[current_config["default_action_key"]]
+
+    if st.session_state.last_report_type != selected_type_key:
+        st.session_state.last_report_type = selected_type_key
+        default_key = current_config["default_action_key"]
+        st.session_state.selected_action_option = default_key
+        st.session_state.proposed_action_text = GRADED_ACTIONS_MAP[default_key]
+
+    def on_action_select_change():
+        chosen = st.session_state.selected_action_option
+        st.session_state.proposed_action_text = GRADED_ACTIONS_MAP.get(chosen, "")
+
+    st.selectbox(
+        "الإجراء الإداري / التأديبي المقترح (مرتب تدريجياً من الأخف إلى الأشد):",
+        options=list(GRADED_ACTIONS_MAP.keys()),
+        key="selected_action_option",
+        on_change=on_action_select_change,
+    )
+
     proposed_action = st.text_input(
-        "الإجراء الإداري / التأديبي المقترح:",
-        value=current_config["default_action"],
+        "صياغة الإجراء المقترح (قابلة للتعديل أو التحرير اليدوي):",
+        key="proposed_action_text",
+        placeholder="اكتب أو عدّل صياغة الإجراء الإداري أو التأديبي المقترح هنا...",
     )
 
     # --- قسم المعاينة الحية التفاعلية ---
