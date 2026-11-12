@@ -775,8 +775,9 @@ def generate_report_docx(
     add_styled_run(p_action, action_text, is_arabic=True, font_size=12, bold=False)
 
     # 1. التواقيع داخل جسم الصفحة مع مساحة كافية وأسطر منقطة لرأي الإدارة
-    sig_tbl = doc.add_table(rows=1, cols=2, width=Inches(6.7))
+    sig_tbl = doc.add_table(rows=1, cols=2)
     sig_tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
+    sig_tbl.autofit = False
     sig_tblPr = sig_tbl._tbl.tblPr
     sig_tblPr.insert(0, OxmlElement("w:bidiVisual"))
 
@@ -1172,7 +1173,7 @@ def render_report_tool():
             st.session_state.report_filename_pdf = f"تقرير_{safe_name}.pdf"
 
     if st.session_state.report_data_docx is not None:
-        st.success("✅ التقرير جاهز للتحميل بصيغتي Word و PDF!")
+        st.success("✅ التقرير جاهز للتحميل!")
         col_dl1, col_dl2 = st.columns(2)
         with col_dl1:
             st.download_button(
@@ -1192,7 +1193,7 @@ def render_report_tool():
                     use_container_width=True,
                 )
             else:
-                st.info("ℹ️ لتفعيل تنزيل PDF المباشر، أضف `reportlab` و `arabic-reshaper` و `python-bidi` إلى ملف `requirements.txt` في GitHub.")
+                st.info("ℹ️ لتفعيل تنزيل PDF المباشر، تأكد من وجود `reportlab` و `arabic-reshaper` و `python-bidi` في ملف `requirements.txt`.")
 
 
 # ==========================================
