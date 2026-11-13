@@ -48,45 +48,79 @@ st.markdown(
         overflow: hidden;
     }
 
-    /* إظهار العبارات كاملة في القوائم المنسدلة وبطاقات الاختيار المتعدد على الهاتف */
-    div[data-baseweb="select"] > div {
+    /* إجبار العبارات في القوائم المنسدلة وبطاقات الاختيار المتعدد على الظهور كاملة في الهاتف */
+    .stApp div[data-baseweb="select"] > div {
         height: auto !important;
-        min-height: 42px !important;
+        min-height: 44px !important;
+        direction: rtl !important;
     }
-    div[data-baseweb="popover"] ul[role="listbox"] li,
-    div[data-baseweb="popover"] ul[role="listbox"] li * {
+    .stApp div[data-baseweb="select"] > div > div:first-child {
+        flex-wrap: wrap !important;
+        gap: 5px !important;
+        padding: 5px !important;
+        width: 100% !important;
+        overflow: visible !important;
+    }
+    .stApp span[data-baseweb="tag"] {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        height: auto !important;
+        min-height: 32px !important;
+        width: 100% !important;
+        max-width: 100% !important;
         white-space: normal !important;
-        word-wrap: break-word !important;
+        padding: 6px 10px !important;
+        margin: 2px 0 !important;
+        direction: rtl !important;
+        box-sizing: border-box !important;
+    }
+    .stApp span[data-baseweb="tag"] > span:first-child {
+        display: block !important;
+        white-space: normal !important;
+        word-break: break-word !important;
         overflow-wrap: break-word !important;
         text-overflow: clip !important;
         overflow: visible !important;
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
+        max-width: calc(100% - 24px) !important;
+        line-height: 1.5 !important;
+        text-align: right !important;
+        direction: rtl !important;
+    }
+
+    /* القائمة المنبثقة للخيارات (Popover Listbox) */
+    body div[data-baseweb="popover"],
+    body div[data-baseweb="popover"] * {
+        direction: rtl !important;
+        text-align: right !important;
+    }
+    body div[data-baseweb="popover"] ul[role="listbox"] {
+        max-height: 60vh !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+    }
+    body div[data-baseweb="popover"] ul[role="listbox"] li,
+    body div[data-baseweb="popover"] ul[role="listbox"] li > div,
+    body div[data-baseweb="popover"] [role="option"],
+    body div[data-baseweb="popover"] [role="option"] > div {
+        display: block !important;
+        width: 100% !important;
         height: auto !important;
+        min-height: 38px !important;
+        max-height: none !important;
+        white-space: normal !important;
+        word-break: break-word !important;
+        overflow-wrap: break-word !important;
+        text-overflow: clip !important;
+        overflow: visible !important;
         line-height: 1.55 !important;
-        direction: rtl !important;
-        text-align: right !important;
+        box-sizing: border-box !important;
     }
-    div[data-baseweb="popover"] ul[role="listbox"] li {
-        padding-top: 8px !important;
-        padding-bottom: 8px !important;
+    body div[data-baseweb="popover"] ul[role="listbox"] li {
+        padding: 8px 12px !important;
         border-bottom: 1px solid #f1f5f9 !important;
-    }
-    span[data-baseweb="tag"] {
-        height: auto !important;
-        max-width: 100% !important;
-        white-space: normal !important;
-        padding-top: 4px !important;
-        padding-bottom: 4px !important;
-        direction: rtl !important;
-    }
-    span[data-baseweb="tag"] span {
-        white-space: normal !important;
-        word-wrap: break-word !important;
-        overflow-wrap: break-word !important;
-        text-overflow: clip !important;
-        overflow: visible !important;
-        max-width: 100% !important;
-        line-height: 1.45 !important;
-        text-align: right !important;
     }
 
     /* إبقاء أزرار التحكم السفلية (نمط 1 / نمط 2 + 🔃 + التوليد) متناسقة على الهاتف والحاسوب */
