@@ -225,6 +225,18 @@ REPORT_TYPES = {
 }
 
 
+def combine_selected_actions(selected_keys):
+    """دمج الإجراءات المختارة (حتى 3 إجراءات) في صياغة متناسقة"""
+    phrases = [
+        GRADED_ACTIONS_MAP[k]
+        for k in selected_keys
+        if GRADED_ACTIONS_MAP.get(k, "").strip()
+    ]
+    if not phrases:
+        return ""
+    return "، و".join(phrases)
+
+
 def get_styled_situations(situations_list, style_idx):
     """ترجمة قائمة المخالفات المختارة إلى الصيغة التعبيرية الحالية"""
     idx = style_idx % len(PHRASING_STYLES)
@@ -275,7 +287,7 @@ def generate_report_docx(
     doc = docx.Document()
     logo_file = get_logo_bytes(uploaded_logo_obj)
 
-    is_dense = len(situations_list) >= 3 or len(custom_notes.strip()) > 100
+    is_dense = len(situations_list) >= 3 or len(custom_notes.strip()) > 100 or len(action_val.strip()) > 130
     size_adj = -0.5 if is_dense else 0.0
 
     w_font = font_profile["word_font"]
@@ -823,31 +835,33 @@ def render_report_tool():
 
     if "last_report_type" not in st.session_state:
         st.session_state.last_report_type = selected_type_key
-    if "selected_action_option" not in st.session_state:
-        st.session_state.selected_action_option = current_config["default_action_key"]
+    if "selected_action_options" not in st.session_state:
+        st.session_state.selected_action_options = [current_config["default_action_key"]]
     if "proposed_action_text" not in st.session_state:
-        st.session_state.proposed_action_text = GRADED_ACTIONS_MAP[current_config["default_action_key"]]
+        st.session_state.proposed_action_text = combine_selected_actions(st.session_state.selected_action_options)
 
     if st.session_state.last_report_type != selected_type_key:
         st.session_state.last_report_type = selected_type_key
         default_key = current_config["default_action_key"]
-        st.session_state.selected_action_option = default_key
-        st.session_state.proposed_action_text = GRADED_ACTIONS_MAP[default_key]
+        st.session_state.selected_action_options = [default_key]
+        st.session_state.proposed_action_text = combine_selected_actions([default_key])
 
     def on_action_select_change():
-        chosen = st.session_state.selected_action_option
-        st.session_state.proposed_action_text = GRADED_ACTIONS_MAP.get(chosen, "")
+        chosen_list = st.session_state.selected_action_options
+        st.session_state.proposed_action_text = combine_selected_actions(chosen_list)
 
-    st.selectbox(
-        "الإجراء الإداري / التأديبي المقترح (مرتب تدريجياً من الأخف إلى الأشد):",
+    st.multiselect(
+        "الإجراء الإداري / التأديبي المقترح (يمكن الجمع بين 3 إجراءات على الأكثر):",
         options=list(GRADED_ACTIONS_MAP.keys()),
-        key="selected_action_option",
+        max_selections=3,
+        key="selected_action_options",
         on_change=on_action_select_change,
     )
 
-    proposed_action = st.text_input(
+    proposed_action = st.text_area(
         "صياغة الإجراء المقترح (قابلة للتعديل أو التحرير اليدوي):",
         key="proposed_action_text",
+        height=90,
         placeholder="اكتب أو عدّل صياغة الإجراء الإداري أو التأديبي المقترح هنا...",
     )
 
