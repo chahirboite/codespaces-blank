@@ -1,5 +1,6 @@
 import datetime
 import io
+import os
 import docx
 import streamlit as st
 from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT, WD_TABLE_ALIGNMENT
@@ -26,7 +27,6 @@ from utils import (
     add_styled_run,
     clear_all_footers_completely,
     clear_and_prepare_headers,
-    format_ar_paragraph,
     format_room_label,
     get_arabic_pdf_font,
     get_auto_school_year,
@@ -47,15 +47,15 @@ FONT_PROFILES = {
         "word_sal_size": 14.0,
         "word_header_base": 11.5,
         "word_footer_size": 10.5,
-        "word_line_spacing": 1.25,
+        "word_line_spacing": 1.42,
         "css_font": "'Amiri', 'Noto Naskh Arabic', serif",
         "css_body_size": "clamp(0.95rem, 3.1vw, 1.08rem)",
         "css_title_size": "clamp(1.05rem, 3.5vw, 1.22rem)",
-        "css_line_height": "1.85",
+        "css_line_height": "2.0",
         "pdf_font_key": "amiri",
         "pdf_body_size": 12.5,
         "pdf_title_size": 14.5,
-        "pdf_leading": 19,
+        "pdf_leading": 21,
     },
     "نمط 2": {
         "word_font": "Arial",
@@ -65,15 +65,15 @@ FONT_PROFILES = {
         "word_sal_size": 12.5,
         "word_header_base": 10.5,
         "word_footer_size": 10.0,
-        "word_line_spacing": 1.3,
+        "word_line_spacing": 1.48,
         "css_font": "'Noto Naskh Arabic', 'Cairo', sans-serif",
         "css_body_size": "clamp(0.90rem, 2.9vw, 1.02rem)",
         "css_title_size": "clamp(1.00rem, 3.3vw, 1.18rem)",
-        "css_line_height": "1.8",
+        "css_line_height": "1.95",
         "pdf_font_key": "noto",
         "pdf_body_size": 11.0,
         "pdf_title_size": 13.0,
-        "pdf_leading": 18,
+        "pdf_leading": 20,
     },
 }
 
@@ -239,6 +239,145 @@ REPORT_TYPES = {
 }
 
 
+def get_bold_font_path(regular_font_path):
+    """البحث عن ملف الخط العريض (Bold) المطابق لملف الخط العادي لضمان تفعيل en gras في PDF"""
+    if not regular_font_path:
+        return None
+    for reg_tag, bold_tag in [("Regular", "Bold"), ("regular", "bold")]:
+        if reg_tag in regular_font_path:
+            candidate = regular_font_path.replace(reg_tag, bold_tag)
+            if os.path.exists(candidate):
+                return candidate
+
+    font_dir = os.path.dirname(regular_font_path)
+    base_lower = os.path.basename(regular_font_path).lower()
+    if os.path.isdir(font_dir):
+        for fname in os.listdir(font_dir):
+            fl = fname.lower()
+            if fl.endswith(".ttf") and "bold" in fl:
+                if ("amiri" in base_lower and "amiri" in fl) or ("noto" in base_lower and "noto" in fl):
+                    return os.path.join(font_dir, fname)
+
+    search_dirs = ["/usr/share/fonts", "/usr/local/share/fonts", os.path.expanduser("~/.fonts")]
+    target_keys = ["amiri"] if "amiri" in base_lower else ["notonaskharabic", "noto"]
+    for sdir in search_dirs:
+        if os.path.isdir(sdir):
+            for root, _, files in os.walk(sdir):
+                for fname in files:
+                    fl = fname.lower()
+                    if fl.endswith(".ttf") and "bold" in fl and any(k in fl for k in target_keys):
+                        return os.path.join(root, fname)
+    return regular_font_path
+
+
+def format_ar_pdf_safe(text, font_name, font_size, max_width, is_bold=False):
+    """
+    تقسيم النص العربي إلى أسطر محسوبة العرض البصري بدقة مع هامش أمان كافٍ،
+    لمنع ReportLab من كسر أول كلمة في السطر (مثل 'يشرفني') وإسقاطها أسفل السطر.
+    """
+    if not text:
+        return ""
+    safe_width = max(80, max_width - 36)
+    all_visual_lines = []
+
+    for raw_para in text.split("\n"):
+        clean_para = " ".join(raw_para.split())
+        if not clean_para:
+            all_visual_lines.append("")
+            continue
+
+        words = clean_para.split(" ")
+        current_words = []
+
+        for word in words:
+            candidate_words = current_words + [word]
+            candidate_logical = " ".join(candidate_words)
+            candidate_visual = shape_ar(candidate_logical)
+            line_w = pdfmetrics.stringWidth(candidate_visual, font_name, font_size)
+
+            if line_w <= safe_width or not current_words:
+                current_words = candidate_words
+            else:
+                vis_line = shape_ar(" ".join(current_words))
+                all_visual_lines.append(f"<b>{vis_line}</b>" if is_bold else vis_line)
+                current_words = [word]
+
+        if current_words:
+            vis_line = shape_ar(" ".join(current_words))
+            all_visual_lines.append(f"<b>{vis_line}</b>" if is_bold else vis_line)
+
+    return "<br/>".join(all_visual_lines)
+
+
+def format_ar_pdf_rich(segments, normal_font, bold_font, font_size, max_width):
+    """
+    تقسيم فقرة عربية متعددة المقاطع (عادي + عريض en gras) إلى أسطر آمنة بصرياً
+    مع تطبيق التغليظ <b>...</b> على المقاطع المحددة فقط دون إفساد ترابط الحروف العربية.
+    """
+    full_text = "".join(t for t, _ in segments)
+    bold_spans = []
+    pos = 0
+    for seg_text, seg_bold in segments:
+        if seg_bold and seg_text.strip():
+            bold_spans.append((pos, pos + len(seg_text)))
+        pos += len(seg_text)
+
+    # استخراج الكلمات مع مواضعها الدقيقة داخل النص الكامل
+    word_items = []
+    i = 0
+    n = len(full_text)
+    while i < n:
+        if full_text[i] == " ":
+            i += 1
+            continue
+        j = i
+        while j < n and full_text[j] != " ":
+            j += 1
+        word_items.append((full_text[i:j], i, j))
+        i = j
+
+    if not word_items:
+        return ""
+
+    safe_width = max(80, max_width - 36)
+    lines_bounds = []
+    cur_start = word_items[0][1]
+    cur_end = word_items[0][2]
+
+    for w_text, w_start, w_end in word_items[1:]:
+        cand_logical = full_text[cur_start:w_end]
+        cand_visual = shape_ar(cand_logical)
+        # القياس بالخط العريض لضمان عدم تجاوز العرض مطلقاً
+        line_w = pdfmetrics.stringWidth(cand_visual, bold_font, font_size)
+        if line_w <= safe_width:
+            cur_end = w_end
+        else:
+            lines_bounds.append((cur_start, cur_end))
+            cur_start = w_start
+            cur_end = w_end
+
+    lines_bounds.append((cur_start, cur_end))
+
+    rendered_lines = []
+    for l_start, l_end in lines_bounds:
+        line_logical = full_text[l_start:l_end]
+        line_visual = shape_ar(line_logical)
+
+        for b_start, b_end in bold_spans:
+            ov_start = max(l_start, b_start)
+            ov_end = min(l_end, b_end)
+            if ov_start < ov_end:
+                bold_sub_logical = full_text[ov_start:ov_end].strip()
+                if bold_sub_logical:
+                    bold_sub_visual = shape_ar(bold_sub_logical)
+                    if bold_sub_visual in line_visual:
+                        line_visual = line_visual.replace(bold_sub_visual, f"<b>{bold_sub_visual}</b>", 1)
+
+        rendered_lines.append(line_visual)
+
+    return "<br/>".join(rendered_lines)
+
+
 def combine_selected_actions(selected_keys):
     """دمج الإجراءات المختارة (حتى 3 إجراءات) في صياغة متناسقة"""
     phrases = [
@@ -333,7 +472,8 @@ def generate_report_docx(
     w_sal = font_profile["word_sal_size"] + size_adj
     w_hdr = font_profile["word_header_base"]
     w_foot = font_profile["word_footer_size"]
-    w_spacing = 1.08 if is_very_dense else (1.15 if is_dense else font_profile["word_line_spacing"])
+    base_spacing = font_profile["word_line_spacing"]
+    w_spacing = (base_spacing - 0.16) if is_very_dense else ((base_spacing - 0.10) if is_dense else base_spacing)
 
     section = doc.sections[0]
     section.top_margin = Inches(0.55)
@@ -401,11 +541,11 @@ def generate_report_docx(
         student_val, class_val, subject_val, date_val, time_val, room_val, action_val, style_idx=style_idx
     )
 
-    # 1. موضوع التقرير (en gras)
+    # 1. موضوع التقرير (en gras) + 12pt مسافة إضافية قبل عبارة "سلام تام..."
     p_title = doc.add_paragraph()
     p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p_title.paragraph_format.space_before = Pt(4 if is_very_dense else 6)
-    p_title.paragraph_format.space_after = Pt(6 if is_very_dense else (8 if is_dense else 12))
+    p_title.paragraph_format.space_after = Pt(18 if is_very_dense else (20 if is_dense else 24))
     r_title = add_styled_run(p_title, f"الموضوع: {report_title}", is_arabic=True, font_size=w_title, bold=True, font_name=w_font)
     r_title.font.underline = True
 
@@ -455,7 +595,7 @@ def generate_report_docx(
     p_end.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p_end.paragraph_format.space_before = Pt(2)
     p_end.paragraph_format.space_after = Pt(8 if is_very_dense else (10 if is_dense else 14))
-    p_end.paragraph_format.line_spacing = 1.15
+    p_end.paragraph_format.line_spacing = w_spacing
     add_styled_run(p_end, texts["closing_salutation"], is_arabic=True, font_size=w_body, bold=False, font_name=w_font)
 
     # التوقيعات (بدون خط عريض)
@@ -525,7 +665,7 @@ def generate_report_pdf(
     subject_val, date_val, time_val, room_val, report_title, situations_list,
     custom_notes, action_val, uploaded_logo_obj, font_profile, style_idx=0
 ):
-    """توليد نسخة PDF رسمية في صفحة واحدة دائماً مع تذييل مثبت أسفل الصفحة"""
+    """توليد نسخة PDF رسمية في صفحة واحدة دائماً مع تفعيل الخط العريض وإصلاح التفاف الأسطر والتباعد"""
     if not HAS_PDF_LIBS:
         return None
     font_path = get_arabic_pdf_font(font_profile["pdf_font_key"])
@@ -533,8 +673,18 @@ def generate_report_pdf(
         return None
 
     registered_font = f"ArabicFont_{font_profile['pdf_font_key']}"
+    registered_bold = f"{registered_font}_Bold"
     try:
         pdfmetrics.registerFont(TTFont(registered_font, font_path))
+        bold_path = get_bold_font_path(font_path)
+        pdfmetrics.registerFont(TTFont(registered_bold, bold_path))
+        pdfmetrics.registerFontFamily(
+            registered_font,
+            normal=registered_font,
+            bold=registered_bold,
+            italic=registered_font,
+            boldItalic=registered_bold,
+        )
     except Exception:
         return None
 
@@ -568,7 +718,7 @@ def generate_report_pdf(
             alignment=TA_CENTER, leftPadding=0, rightPadding=0
         )
         style_title = ParagraphStyle(
-            "ArTitle", fontName=registered_font, fontSize=p_title, leading=p_lead + 2,
+            "ArTitle", fontName=registered_bold, fontSize=p_title, leading=p_lead + 2,
             alignment=TA_CENTER, leftPadding=0, rightPadding=0
         )
         style_hdr_r = ParagraphStyle(
@@ -607,31 +757,40 @@ def generate_report_pdf(
         items.append(hdr_table)
         items.append(Spacer(1, 10 * scale))
 
-        wrapped_title = format_ar_paragraph(f"الموضوع: {report_title}", registered_font, p_title, usable_width)
+        # 1. موضوع التقرير (en gras) + 12pt مسافة إضافية قبل عبارة "سلام تام..."
+        wrapped_title = format_ar_pdf_safe(
+            f"الموضوع: {report_title}", registered_bold, p_title, usable_width, is_bold=True
+        )
         items.append(Paragraph(f"<u>{wrapped_title}</u>", style_title))
-        items.append(Spacer(1, 8 * scale))
+        items.append(Spacer(1, 20 * scale))
 
         items.append(Paragraph(shape_ar(texts["salutation"]), style_center))
         items.append(Spacer(1, 7 * scale))
 
-        wrapped_intro = format_ar_paragraph(texts["intro_plain"], registered_font, p_body, usable_width)
+        # 2. فقرة التقديم ومعلومات التلميذ (معلومات التلميذ en gras)
+        wrapped_intro = format_ar_pdf_rich(
+            texts["intro_segments"], registered_font, registered_bold, p_body, usable_width
+        )
         items.append(Paragraph(wrapped_intro, style_right))
         items.append(Spacer(1, 7 * scale))
 
         items.append(Paragraph(shape_ar(texts["section_heading"]), style_right))
         items.append(Spacer(1, 4 * scale))
         for sit in merged_violations:
-            wrapped_sit = format_ar_paragraph(f"• {sit}", registered_font, p_body, usable_width - 8)
+            wrapped_sit = format_ar_pdf_safe(f"• {sit}", registered_font, p_body, usable_width - 8, is_bold=False)
             items.append(Paragraph(wrapped_sit, style_right))
             items.append(Spacer(1, 3 * scale))
 
         items.append(Spacer(1, 7 * scale))
 
-        wrapped_closing = format_ar_paragraph(texts["closing_plain"], registered_font, p_body, usable_width)
+        # 3. فقرة الملتمس والإجراء التأديبي (الإجراء التأديبي en gras)
+        wrapped_closing = format_ar_pdf_rich(
+            texts["closing_segments"], registered_font, registered_bold, p_body, usable_width
+        )
         items.append(Paragraph(wrapped_closing, style_right))
         items.append(Spacer(1, 6 * scale))
 
-        wrapped_end = format_ar_paragraph(texts["closing_salutation"], registered_font, p_body + 0.5, usable_width)
+        wrapped_end = format_ar_pdf_safe(texts["closing_salutation"], registered_font, p_body + 0.5, usable_width, is_bold=False)
         items.append(Paragraph(wrapped_end, style_center))
         items.append(Spacer(1, 12 * scale))
 
@@ -748,7 +907,7 @@ def render_live_preview_html(
 <div style="white-space: nowrap;">الأستاذ(ة): {t_name}</div>
 </div>
 </div>
-<div style="text-align: center; margin: 14px 0;">
+<div style="text-align: center; margin: 14px 0 calc(14px + 12pt) 0;">
 <h3 style="font-family: {css_font}; margin: 0; font-size: {css_title_sz}; font-weight: 700; text-decoration: underline; color: #0f172a; line-height: 1.6;">الموضوع: {report_title}</h3>
 </div>
 <div style="text-align: center; font-weight: 400; font-size: {css_body_sz}; margin-bottom: 12px;">
@@ -764,7 +923,7 @@ def render_live_preview_html(
 <p style="line-height: {css_lh}; text-align: justify; font-weight: 400; font-size: {css_body_sz}; margin-top: 14px; margin-bottom: 10px; word-break: break-word;">
 {closing_html}
 </p>
-<div style="text-align: center; font-weight: 400; font-size: {css_body_sz}; line-height: 1.7; margin-top: 8px; margin-bottom: 20px;">
+<div style="text-align: center; font-weight: 400; font-size: {css_body_sz}; line-height: {css_lh}; margin-top: 8px; margin-bottom: 20px;">
 {ending_html}
 </div>
 <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-top: 25px; margin-bottom: 70px; padding-top: 10px; font-weight: 400; font-size: clamp(0.82rem, 2.7vw, 0.98rem);">
