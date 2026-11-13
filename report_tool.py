@@ -288,7 +288,8 @@ def generate_report_docx(
     logo_file = get_logo_bytes(uploaded_logo_obj)
 
     is_dense = len(situations_list) >= 3 or len(custom_notes.strip()) > 100 or len(action_val.strip()) > 130
-    size_adj = -0.5 if is_dense else 0.0
+    is_very_dense = (len(situations_list) + (1 if custom_notes.strip() else 0)) >= 4 and len(action_val.strip()) > 150
+    size_adj = -1.0 if is_very_dense else (-0.5 if is_dense else 0.0)
 
     w_font = font_profile["word_font"]
     w_body = font_profile["word_body_size"] + size_adj
@@ -297,7 +298,7 @@ def generate_report_docx(
     w_sal = font_profile["word_sal_size"] + size_adj
     w_hdr = font_profile["word_header_base"]
     w_foot = font_profile["word_footer_size"]
-    w_spacing = 1.15 if is_dense else font_profile["word_line_spacing"]
+    w_spacing = 1.08 if is_very_dense else (1.15 if is_dense else font_profile["word_line_spacing"])
 
     section = doc.sections[0]
     section.top_margin = Inches(0.55)
@@ -368,27 +369,27 @@ def generate_report_docx(
 
     p_title = doc.add_paragraph()
     p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    p_title.paragraph_format.space_before = Pt(6)
-    p_title.paragraph_format.space_after = Pt(8 if is_dense else 12)
+    p_title.paragraph_format.space_before = Pt(4 if is_very_dense else 6)
+    p_title.paragraph_format.space_after = Pt(6 if is_very_dense else (8 if is_dense else 12))
     r_title = add_styled_run(p_title, f"الموضوع: {report_title}", is_arabic=True, font_size=w_title, bold=True, font_name=w_font)
     r_title.font.underline = True
 
     p_sal = doc.add_paragraph()
     p_sal.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p_sal.paragraph_format.space_before = Pt(2)
-    p_sal.paragraph_format.space_after = Pt(6 if is_dense else 8)
+    p_sal.paragraph_format.space_after = Pt(4 if is_very_dense else (6 if is_dense else 8))
     add_styled_run(p_sal, texts["salutation"], is_arabic=True, font_size=w_sal, bold=True, font_name=w_font)
 
     p_body1 = doc.add_paragraph()
     p_body1.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
     p_body1.paragraph_format.space_before = Pt(2)
-    p_body1.paragraph_format.space_after = Pt(6)
+    p_body1.paragraph_format.space_after = Pt(5 if is_very_dense else 6)
     p_body1.paragraph_format.line_spacing = w_spacing
     add_styled_run(p_body1, texts["intro_text"], is_arabic=True, font_size=w_body, bold=False, font_name=w_font)
 
     p_situations_head = doc.add_paragraph()
-    p_situations_head.paragraph_format.space_before = Pt(4)
-    p_situations_head.paragraph_format.space_after = Pt(3)
+    p_situations_head.paragraph_format.space_before = Pt(3)
+    p_situations_head.paragraph_format.space_after = Pt(2)
     add_styled_run(p_situations_head, texts["section_heading"], is_arabic=True, font_size=w_body, bold=True, font_name=w_font)
 
     if styled_situations:
@@ -410,16 +411,16 @@ def generate_report_docx(
 
     p_action = doc.add_paragraph()
     p_action.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-    p_action.paragraph_format.space_before = Pt(6)
-    p_action.paragraph_format.space_after = Pt(6)
+    p_action.paragraph_format.space_before = Pt(5 if is_very_dense else 6)
+    p_action.paragraph_format.space_after = Pt(5 if is_very_dense else 6)
     p_action.paragraph_format.line_spacing = w_spacing
     add_styled_run(p_action, texts["closing_body"], is_arabic=True, font_size=w_body, bold=False, font_name=w_font)
 
     p_end = doc.add_paragraph()
     p_end.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    p_end.paragraph_format.space_before = Pt(3)
-    p_end.paragraph_format.space_after = Pt(10 if is_dense else 14)
-    p_end.paragraph_format.line_spacing = 1.2
+    p_end.paragraph_format.space_before = Pt(2)
+    p_end.paragraph_format.space_after = Pt(8 if is_very_dense else (10 if is_dense else 14))
+    p_end.paragraph_format.line_spacing = 1.15
     add_styled_run(p_end, texts["closing_salutation"], is_arabic=True, font_size=w_body, bold=False, font_name=w_font)
 
     sig_tbl = doc.add_table(rows=1, cols=2)
@@ -441,7 +442,7 @@ def generate_report_docx(
     set_cell_rtl(cell_sig_r)
     p_sig_r = cell_sig_r.paragraphs[0]
     p_sig_r.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-    p_sig_r.paragraph_format.space_after = Pt(45 if is_dense else 65)
+    p_sig_r.paragraph_format.space_after = Pt(35 if is_very_dense else (45 if is_dense else 65))
     add_styled_run(p_sig_r, "توقيع الأستاذ(ة):", is_arabic=True, font_size=w_bullet, bold=True, font_name=w_font)
 
     cell_sig_l = sig_tbl.rows[0].cells[1]
@@ -450,14 +451,14 @@ def generate_report_docx(
     set_cell_rtl(cell_sig_l)
     p_sig_l = cell_sig_l.paragraphs[0]
     p_sig_l.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-    p_sig_l.paragraph_format.space_after = Pt(6)
+    p_sig_l.paragraph_format.space_after = Pt(4)
     add_styled_run(p_sig_l, "رأي وتوقيع الإدارة التربوية:", is_arabic=True, font_size=w_bullet, bold=True, font_name=w_font)
 
     for idx in range(3):
         p_dots = cell_sig_l.add_paragraph()
         p_dots.alignment = WD_ALIGN_PARAGRAPH.RIGHT
         p_dots.paragraph_format.space_before = Pt(2)
-        p_dots.paragraph_format.space_after = Pt(12 if idx == 2 else 4)
+        p_dots.paragraph_format.space_after = Pt(8 if idx == 2 else 3)
         add_styled_run(p_dots, "...........................................................", is_arabic=True, font_size=11, bold=False, font_name=w_font)
 
     clear_all_footers_completely(section)
@@ -626,7 +627,7 @@ def generate_report_pdf(
     story = build_story_elements(scale=1.0)
     total_height = sum(el.wrap(usable_width, max_body_height)[1] for el in story)
     if total_height > max_body_height:
-        fit_scale = max(0.76, (max_body_height / total_height) * 0.96)
+        fit_scale = max(0.68, (max_body_height / total_height) * 0.95)
         story = build_story_elements(scale=fit_scale)
 
     def draw_pdf_footer(canvas, doc_obj):
