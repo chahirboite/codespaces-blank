@@ -1,6 +1,8 @@
 import datetime
 import io
 import os
+import tempfile
+import urllib.request
 import docx
 import streamlit as st
 from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT, WD_TABLE_ALIGNMENT
@@ -254,10 +256,14 @@ def add_report_run(paragraph, text, font_size, bold=False, font_name="Simplified
     return run
 
 
-def get_bold_font_path(regular_font_path):
-    """البحث عن ملف الخط العريض (Bold) المطابق لملف الخط العادي لضمان تفعيل en gras في PDF"""
+def get_bold_font_path(regular_font_path, font_key="amiri"):
+    """
+    جلب ملف الخط العريض المطابق تماماً لنفس عائلة الخط (Amiri-Bold أو NotoNaskhArabic-Bold)
+    لضمان تناسق الشكل وعرض الأحرف في PDF.
+    """
     if not regular_font_path:
         return None
+
     for reg_tag, bold_tag in [("Regular", "Bold"), ("regular", "bold")]:
         if reg_tag in regular_font_path:
             candidate = regular_font_path.replace(reg_tag, bold_tag)
@@ -265,11 +271,11 @@ def get_bold_font_path(regular_font_path):
                 return candidate
 
     font_dir = os.path.dirname(regular_font_path)
-    base_lower = os.path.basename(regular_font_path).lower()
-    target_keys = ["amiri"] if "amiri" in base_lower else ["notonaskharabic", "noto"]
+    target_keys = ["amiri"] if font_key == "amiri" else ["notonaskharabic", "noto"]
 
     search_dirs = [
         font_dir,
+        tempfile.gettempdir(),
         ".",
         os.path.join(".", "fonts"),
         os.path.join(".", "assets"),
@@ -285,28 +291,67 @@ def get_bold_font_path(regular_font_path):
                     if fl.endswith(".ttf") and "bold" in fl and any(k in fl for k in target_keys):
                         return os.path.join(root, fname)
 
-    # خط احتياطي عريض يدعم العربية في حال عدم وجود ملف Bold مخصص
-    for sdir in ["/usr/share/fonts", "/usr/local/share/fonts"]:
-        if os.path.isdir(sdir):
-            for root, _, files in os.walk(sdir):
-                for fname in files:
-                    fl = fname.lower()
-                    if fl.endswith(".ttf") and "bold" in fl and any(
-                        k in fl for k in ["amiri", "noto", "cairo", "dejavusans"]
-                    ):
-                        return os.path.join(root, fname)
+    # تحميل النسخة العريضة المطابقة لنفس الخط من المستودع الرسمي وتخزينها مؤقتاً
+    bold_urls = {
+        "amiri": (
+            "Amiri-Bold.ttf",
+            "https://raw.githubusercontent.com/google/fonts/main/ofl/amiri/Amiri-Bold.ttf",
+        ),
+        "noto": (
+            "NotoNaskhArabic-Bold.ttf",
+            "https://github.com/notofonts/arabic/raw/main/fonts/NotoNaskhArabic/hinted/ttf/NotoNaskhArabic-Bold.ttf",
+        ),
+    }
+    fname, url = bold_urls.get(font_key, bold_urls["amiri"])
+    cached_bold = os.path.join(tempfile.gettempdir(), fname)
+    if os.path.exists(cached_bold) and os.path.getsize(cached_bold) > 10000:
+        return cached_bold
+
+    try:
+        urllib.request.urlretrieve(url, cached_bold)
+        if os.path.exists(cached_bold) and os.path.getsize(cached_bold) > 10000:
+            return cached_bold
+    except Exception:
+        pass
 
     return regular_font_path
 
 
+def measure_rich_line_width(full_text, l_start, l_end, bold_spans, normal_font, bold_font, font_size):
+    """
+    حساب العرض البصري الحقيقي للسطر بقياس كل مقطع بالخط الفعلي الذي سيُطبع به
+    (عادي للمقاطع العادية، وعريض للمقاطع المُغلَّظة فقط) لمنع الكسر المبكر أو التجاوز.
+    """
+    cuts = {l_start, l_end}
+    for b_s, b_e in bold_spans:
+        if l_start < b_s < l_end:
+            cuts.add(b_s)
+        if l_start < b_e < l_end:
+            cuts.add(b_e)
+
+    sorted_cuts = sorted(cuts)
+    total_w = 0.0
+    for idx in range(len(sorted_cuts) - 1):
+        s_pos = sorted_cuts[idx]
+        e_pos = sorted_cuts[idx + 1]
+        sub_txt = full_text[s_pos:e_pos]
+        if not sub_txt:
+            continue
+        is_b = any(b_s <= s_pos and e_pos <= b_e for b_s, b_e in bold_spans)
+        f_used = bold_font if is_b else normal_font
+        total_w += pdfmetrics.stringWidth(shape_ar(sub_txt), f_used, font_size)
+
+    return total_w
+
+
 def format_ar_pdf_safe(text, font_name, font_size, max_width, is_bold=False):
     """
-    تقسيم النص العربي إلى أسطر محسوبة العرض البصري بدقة مع هامش أمان كافٍ،
-    لمنع ReportLab من كسر أول كلمة في السطر (مثل 'يشرفني') وإسقاطها أسفل السطر.
+    تقسيم النص العربي إلى أسطر محسوبة العرض البصري بدقة مطابقة لإطار الصفحة في PDF
+    (مع مراعاة الحشو الداخلي لإطار SimpleDocTemplate البالغ 12pt).
     """
     if not text:
         return ""
-    safe_width = max(80, max_width - 36)
+    safe_width = max(80, max_width - 18)
     all_visual_lines = []
 
     for raw_para in text.split("\n"):
@@ -340,8 +385,8 @@ def format_ar_pdf_safe(text, font_name, font_size, max_width, is_bold=False):
 
 def format_ar_pdf_rich(segments, normal_font, bold_font, font_size, max_width):
     """
-    تقسيم فقرة عربية متعددة المقاطع (عادي + عريض en gras) إلى أسطر آمنة بصرياً
-    باستخدام محددات اتجاهية (RTL) تحافظ على تطابق المواضع بعد خوارزمية BiDi.
+    تقسيم فقرة عربية متعددة المقاطع (عادي + عريض en gras) إلى أسطر متناسقة العرض
+    باستخدام قياس المقاطع الفعلي ومحددات اتجاهية تحافظ على مواضع التغليظ بعد BiDi.
     """
     full_text = "".join(t for t, _ in segments)
     bold_spans = []
@@ -367,15 +412,15 @@ def format_ar_pdf_rich(segments, normal_font, bold_font, font_size, max_width):
     if not word_items:
         return ""
 
-    safe_width = max(80, max_width - 36)
+    safe_width = max(80, max_width - 18)
     lines_bounds = []
     cur_start = word_items[0][1]
     cur_end = word_items[0][2]
 
     for w_text, w_start, w_end in word_items[1:]:
-        cand_logical = full_text[cur_start:w_end]
-        cand_visual = shape_ar(cand_logical)
-        line_w = pdfmetrics.stringWidth(cand_visual, bold_font, font_size)
+        line_w = measure_rich_line_width(
+            full_text, cur_start, w_end, bold_spans, normal_font, bold_font, font_size
+        )
         if line_w <= safe_width:
             cur_end = w_end
         else:
@@ -385,7 +430,6 @@ def format_ar_pdf_rich(segments, normal_font, bold_font, font_size, max_width):
 
     lines_bounds.append((cur_start, cur_end))
 
-    # محددات ذات فئة اتجاهية R (من اليمين لليسار) لا يغيرها arabic_reshaper وتحفظ حدود المقاطع العريضة
     START_M = "\u05D0"  # يصبح </b> بعد الانعكاس البصري
     END_M = "\u05D1"    # يصبح <b> بعد الانعكاس البصري
 
@@ -721,19 +765,23 @@ def generate_report_pdf(
     subject_val, date_val, time_val, room_val, report_title, situations_list,
     custom_notes, action_val, uploaded_logo_obj, font_profile, style_idx=0
 ):
-    """توليد نسخة PDF رسمية في صفحة واحدة دائماً مع تفعيل الخط العريض وإصلاح التفاف الأسطر والتباعد"""
+    """توليد نسخة PDF رسمية في صفحة واحدة دائماً مع تفعيل الخط العريض وتناسق الرجوع إلى السطر"""
     if not HAS_PDF_LIBS:
         return None
-    font_path = get_arabic_pdf_font(font_profile["pdf_font_key"])
+    font_key = font_profile["pdf_font_key"]
+    font_path = get_arabic_pdf_font(font_key)
     if not font_path:
         return None
 
-    registered_font = f"ArabicFont_{font_profile['pdf_font_key']}"
+    registered_font = f"ArabicFont_{font_key}"
     registered_bold = f"{registered_font}_Bold"
     try:
         pdfmetrics.registerFont(TTFont(registered_font, font_path))
-        bold_path = get_bold_font_path(font_path)
-        pdfmetrics.registerFont(TTFont(registered_bold, bold_path))
+        bold_path = get_bold_font_path(font_path, font_key=font_key)
+        try:
+            pdfmetrics.registerFont(TTFont(registered_bold, bold_path))
+        except Exception:
+            pdfmetrics.registerFont(TTFont(registered_bold, font_path))
         pdfmetrics.registerFontFamily(
             registered_font,
             normal=registered_font,
@@ -833,7 +881,7 @@ def generate_report_pdf(
         items.append(Paragraph(shape_ar(texts["section_heading"]), style_right))
         items.append(Spacer(1, 4 * scale))
         for sit in merged_violations:
-            wrapped_sit = format_ar_pdf_safe(f"• {sit}", registered_font, p_body, usable_width - 8, is_bold=False)
+            wrapped_sit = format_ar_pdf_safe(f"• {sit}", registered_font, p_body, usable_width, is_bold=False)
             items.append(Paragraph(wrapped_sit, style_right))
             items.append(Spacer(1, 3 * scale))
 
