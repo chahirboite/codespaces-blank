@@ -47,6 +47,48 @@ st.markdown(
         width: 100%;
         overflow: hidden;
     }
+
+    /* إظهار العبارات كاملة في القوائم المنسدلة وبطاقات الاختيار المتعدد على الهاتف */
+    div[data-baseweb="select"] > div {
+        height: auto !important;
+        min-height: 42px !important;
+    }
+    div[data-baseweb="popover"] ul[role="listbox"] li,
+    div[data-baseweb="popover"] ul[role="listbox"] li * {
+        white-space: normal !important;
+        word-wrap: break-word !important;
+        overflow-wrap: break-word !important;
+        text-overflow: clip !important;
+        overflow: visible !important;
+        height: auto !important;
+        line-height: 1.55 !important;
+        direction: rtl !important;
+        text-align: right !important;
+    }
+    div[data-baseweb="popover"] ul[role="listbox"] li {
+        padding-top: 8px !important;
+        padding-bottom: 8px !important;
+        border-bottom: 1px solid #f1f5f9 !important;
+    }
+    span[data-baseweb="tag"] {
+        height: auto !important;
+        max-width: 100% !important;
+        white-space: normal !important;
+        padding-top: 4px !important;
+        padding-bottom: 4px !important;
+        direction: rtl !important;
+    }
+    span[data-baseweb="tag"] span {
+        white-space: normal !important;
+        word-wrap: break-word !important;
+        overflow-wrap: break-word !important;
+        text-overflow: clip !important;
+        overflow: visible !important;
+        max-width: 100% !important;
+        line-height: 1.45 !important;
+        text-align: right !important;
+    }
+
     /* إبقاء أزرار التحكم السفلية (نمط 1 / نمط 2 + 🔃 + التوليد) متناسقة على الهاتف والحاسوب */
     .element-container:has(.inline-action-marker) + .element-container div[data-testid="stHorizontalBlock"] {
         flex-direction: row !important;
