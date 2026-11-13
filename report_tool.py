@@ -239,6 +239,21 @@ REPORT_TYPES = {
 }
 
 
+def add_report_run(paragraph, text, font_size, bold=False, font_name="Simplified Arabic"):
+    """إضافة مقطع نصي في Word مع ضبط التغليظ العربي (cs_bold) والعادي بدقة"""
+    run = add_styled_run(
+        paragraph,
+        text,
+        is_arabic=True,
+        font_size=font_size,
+        bold=bold,
+        font_name=font_name,
+    )
+    run.bold = bold
+    run.font.cs_bold = bold
+    return run
+
+
 def get_bold_font_path(regular_font_path):
     """البحث عن ملف الخط العريض (Bold) المطابق لملف الخط العادي لضمان تفعيل en gras في PDF"""
     if not regular_font_path:
@@ -251,22 +266,36 @@ def get_bold_font_path(regular_font_path):
 
     font_dir = os.path.dirname(regular_font_path)
     base_lower = os.path.basename(regular_font_path).lower()
-    if os.path.isdir(font_dir):
-        for fname in os.listdir(font_dir):
-            fl = fname.lower()
-            if fl.endswith(".ttf") and "bold" in fl:
-                if ("amiri" in base_lower and "amiri" in fl) or ("noto" in base_lower and "noto" in fl):
-                    return os.path.join(font_dir, fname)
-
-    search_dirs = ["/usr/share/fonts", "/usr/local/share/fonts", os.path.expanduser("~/.fonts")]
     target_keys = ["amiri"] if "amiri" in base_lower else ["notonaskharabic", "noto"]
+
+    search_dirs = [
+        font_dir,
+        ".",
+        os.path.join(".", "fonts"),
+        os.path.join(".", "assets"),
+        "/usr/share/fonts",
+        "/usr/local/share/fonts",
+        os.path.expanduser("~/.fonts"),
+    ]
     for sdir in search_dirs:
-        if os.path.isdir(sdir):
+        if sdir and os.path.isdir(sdir):
             for root, _, files in os.walk(sdir):
                 for fname in files:
                     fl = fname.lower()
                     if fl.endswith(".ttf") and "bold" in fl and any(k in fl for k in target_keys):
                         return os.path.join(root, fname)
+
+    # خط احتياطي عريض يدعم العربية في حال عدم وجود ملف Bold مخصص
+    for sdir in ["/usr/share/fonts", "/usr/local/share/fonts"]:
+        if os.path.isdir(sdir):
+            for root, _, files in os.walk(sdir):
+                for fname in files:
+                    fl = fname.lower()
+                    if fl.endswith(".ttf") and "bold" in fl and any(
+                        k in fl for k in ["amiri", "noto", "cairo", "dejavusans"]
+                    ):
+                        return os.path.join(root, fname)
+
     return regular_font_path
 
 
@@ -312,7 +341,7 @@ def format_ar_pdf_safe(text, font_name, font_size, max_width, is_bold=False):
 def format_ar_pdf_rich(segments, normal_font, bold_font, font_size, max_width):
     """
     تقسيم فقرة عربية متعددة المقاطع (عادي + عريض en gras) إلى أسطر آمنة بصرياً
-    مع تطبيق التغليظ <b>...</b> على المقاطع المحددة فقط دون إفساد ترابط الحروف العربية.
+    باستخدام محددات اتجاهية (RTL) تحافظ على تطابق المواضع بعد خوارزمية BiDi.
     """
     full_text = "".join(t for t, _ in segments)
     bold_spans = []
@@ -322,7 +351,6 @@ def format_ar_pdf_rich(segments, normal_font, bold_font, font_size, max_width):
             bold_spans.append((pos, pos + len(seg_text)))
         pos += len(seg_text)
 
-    # استخراج الكلمات مع مواضعها الدقيقة داخل النص الكامل
     word_items = []
     i = 0
     n = len(full_text)
@@ -347,7 +375,6 @@ def format_ar_pdf_rich(segments, normal_font, bold_font, font_size, max_width):
     for w_text, w_start, w_end in word_items[1:]:
         cand_logical = full_text[cur_start:w_end]
         cand_visual = shape_ar(cand_logical)
-        # القياس بالخط العريض لضمان عدم تجاوز العرض مطلقاً
         line_w = pdfmetrics.stringWidth(cand_visual, bold_font, font_size)
         if line_w <= safe_width:
             cur_end = w_end
@@ -358,22 +385,51 @@ def format_ar_pdf_rich(segments, normal_font, bold_font, font_size, max_width):
 
     lines_bounds.append((cur_start, cur_end))
 
+    # محددات ذات فئة اتجاهية R (من اليمين لليسار) لا يغيرها arabic_reshaper وتحفظ حدود المقاطع العريضة
+    START_M = "\u05D0"  # يصبح </b> بعد الانعكاس البصري
+    END_M = "\u05D1"    # يصبح <b> بعد الانعكاس البصري
+
     rendered_lines = []
     for l_start, l_end in lines_bounds:
         line_logical = full_text[l_start:l_end]
-        line_visual = shape_ar(line_logical)
-
+        overlaps = []
         for b_start, b_end in bold_spans:
-            ov_start = max(l_start, b_start)
-            ov_end = min(l_end, b_end)
-            if ov_start < ov_end:
-                bold_sub_logical = full_text[ov_start:ov_end].strip()
-                if bold_sub_logical:
-                    bold_sub_visual = shape_ar(bold_sub_logical)
-                    if bold_sub_visual in line_visual:
-                        line_visual = line_visual.replace(bold_sub_visual, f"<b>{bold_sub_visual}</b>", 1)
+            ov_s = max(l_start, b_start)
+            ov_e = min(l_end, b_end)
+            if ov_s < ov_e:
+                overlaps.append((ov_s - l_start, ov_e - l_start))
 
-        rendered_lines.append(line_visual)
+        if not overlaps:
+            rendered_lines.append(shape_ar(line_logical))
+            continue
+
+        if len(overlaps) == 1 and overlaps[0][0] == 0 and overlaps[0][1] == len(line_logical):
+            rendered_lines.append(f"<b>{shape_ar(line_logical)}</b>")
+            continue
+
+        marked = line_logical
+        starts_at_zero = False
+        ends_at_len = False
+
+        for rel_s, rel_e in reversed(overlaps):
+            if rel_e == len(line_logical):
+                ends_at_len = True
+            else:
+                marked = marked[:rel_e] + END_M + marked[rel_e:]
+
+            if rel_s == 0:
+                starts_at_zero = True
+            else:
+                marked = marked[:rel_s] + START_M + marked[rel_s:]
+
+        vis = shape_ar(marked)
+        vis = vis.replace(END_M, "<b>").replace(START_M, "</b>")
+        if ends_at_len:
+            vis = "<b>" + vis
+        if starts_at_zero:
+            vis = vis + "</b>"
+
+        rendered_lines.append(vis)
 
     return "<br/>".join(rendered_lines)
 
@@ -546,7 +602,7 @@ def generate_report_docx(
     p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p_title.paragraph_format.space_before = Pt(4 if is_very_dense else 6)
     p_title.paragraph_format.space_after = Pt(18 if is_very_dense else (20 if is_dense else 24))
-    r_title = add_styled_run(p_title, f"الموضوع: {report_title}", is_arabic=True, font_size=w_title, bold=True, font_name=w_font)
+    r_title = add_report_run(p_title, f"الموضوع: {report_title}", font_size=w_title, bold=True, font_name=w_font)
     r_title.font.underline = True
 
     # التحية (بدون خط عريض)
@@ -554,7 +610,7 @@ def generate_report_docx(
     p_sal.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p_sal.paragraph_format.space_before = Pt(2)
     p_sal.paragraph_format.space_after = Pt(4 if is_very_dense else (6 if is_dense else 8))
-    add_styled_run(p_sal, texts["salutation"], is_arabic=True, font_size=w_sal, bold=False, font_name=w_font)
+    add_report_run(p_sal, texts["salutation"], font_size=w_sal, bold=False, font_name=w_font)
 
     # 2. فقرة التقديم ومعلومات التلميذ (معلومات التلميذ فقط en gras)
     p_body1 = doc.add_paragraph()
@@ -563,13 +619,13 @@ def generate_report_docx(
     p_body1.paragraph_format.space_after = Pt(5 if is_very_dense else 6)
     p_body1.paragraph_format.line_spacing = w_spacing
     for seg_text, seg_bold in texts["intro_segments"]:
-        add_styled_run(p_body1, seg_text, is_arabic=True, font_size=w_body, bold=seg_bold, font_name=w_font)
+        add_report_run(p_body1, seg_text, font_size=w_body, bold=seg_bold, font_name=w_font)
 
     # عنوان تفاصيل الواقعة (بدون خط عريض)
     p_situations_head = doc.add_paragraph()
     p_situations_head.paragraph_format.space_before = Pt(3)
     p_situations_head.paragraph_format.space_after = Pt(2)
-    add_styled_run(p_situations_head, texts["section_heading"], is_arabic=True, font_size=w_body, bold=False, font_name=w_font)
+    add_report_run(p_situations_head, texts["section_heading"], font_size=w_body, bold=False, font_name=w_font)
 
     # قائمة المخالفات بما فيها السطر الاختياري المدمج (بدون خط عريض)
     if merged_violations:
@@ -579,7 +635,7 @@ def generate_report_docx(
             p_bullet.paragraph_format.space_before = Pt(1)
             p_bullet.paragraph_format.space_after = Pt(2)
             p_bullet.paragraph_format.line_spacing = w_spacing
-            add_styled_run(p_bullet, sit, is_arabic=True, font_size=w_bullet, bold=False, font_name=w_font)
+            add_report_run(p_bullet, sit, font_size=w_bullet, bold=False, font_name=w_font)
 
     # 3. فقرة الملتمس والإجراء التأديبي (الإجراء التأديبي فقط en gras)
     p_action = doc.add_paragraph()
@@ -588,7 +644,7 @@ def generate_report_docx(
     p_action.paragraph_format.space_after = Pt(5 if is_very_dense else 6)
     p_action.paragraph_format.line_spacing = w_spacing
     for seg_text, seg_bold in texts["closing_segments"]:
-        add_styled_run(p_action, seg_text, is_arabic=True, font_size=w_body, bold=seg_bold, font_name=w_font)
+        add_report_run(p_action, seg_text, font_size=w_body, bold=seg_bold, font_name=w_font)
 
     # عبارة الختام (بدون خط عريض)
     p_end = doc.add_paragraph()
@@ -596,7 +652,7 @@ def generate_report_docx(
     p_end.paragraph_format.space_before = Pt(2)
     p_end.paragraph_format.space_after = Pt(8 if is_very_dense else (10 if is_dense else 14))
     p_end.paragraph_format.line_spacing = w_spacing
-    add_styled_run(p_end, texts["closing_salutation"], is_arabic=True, font_size=w_body, bold=False, font_name=w_font)
+    add_report_run(p_end, texts["closing_salutation"], font_size=w_body, bold=False, font_name=w_font)
 
     # التوقيعات (بدون خط عريض)
     sig_tbl = doc.add_table(rows=1, cols=2)
@@ -619,7 +675,7 @@ def generate_report_docx(
     p_sig_r = cell_sig_r.paragraphs[0]
     p_sig_r.alignment = WD_ALIGN_PARAGRAPH.RIGHT
     p_sig_r.paragraph_format.space_after = Pt(35 if is_very_dense else (45 if is_dense else 65))
-    add_styled_run(p_sig_r, "توقيع الأستاذ(ة):", is_arabic=True, font_size=w_bullet, bold=False, font_name=w_font)
+    add_report_run(p_sig_r, "توقيع الأستاذ(ة):", font_size=w_bullet, bold=False, font_name=w_font)
 
     cell_sig_l = sig_tbl.rows[0].cells[1]
     cell_sig_l.width = Inches(3.6)
@@ -628,14 +684,14 @@ def generate_report_docx(
     p_sig_l = cell_sig_l.paragraphs[0]
     p_sig_l.alignment = WD_ALIGN_PARAGRAPH.RIGHT
     p_sig_l.paragraph_format.space_after = Pt(4)
-    add_styled_run(p_sig_l, "رأي وتوقيع الإدارة التربوية:", is_arabic=True, font_size=w_bullet, bold=False, font_name=w_font)
+    add_report_run(p_sig_l, "رأي وتوقيع الإدارة التربوية:", font_size=w_bullet, bold=False, font_name=w_font)
 
     for idx in range(3):
         p_dots = cell_sig_l.add_paragraph()
         p_dots.alignment = WD_ALIGN_PARAGRAPH.RIGHT
         p_dots.paragraph_format.space_before = Pt(2)
         p_dots.paragraph_format.space_after = Pt(8 if idx == 2 else 3)
-        add_styled_run(p_dots, "...........................................................", is_arabic=True, font_size=11, bold=False, font_name=w_font)
+        add_report_run(p_dots, "...........................................................", font_size=11, bold=False, font_name=w_font)
 
     clear_all_footers_completely(section)
     footer = section.footer
@@ -650,9 +706,9 @@ def generate_report_docx(
     p_foot.paragraph_format.tab_stops.add_tab_stop(right_pos, WD_TAB_ALIGNMENT.LEFT)
     p_foot.alignment = WD_ALIGN_PARAGRAPH.RIGHT
 
-    add_styled_run(p_foot, f"الأستاذ(ة): {t_name}", is_arabic=True, font_size=w_foot, bold=False, font_name=w_font)
+    add_report_run(p_foot, f"الأستاذ(ة): {t_name}", font_size=w_foot, bold=False, font_name=w_font)
     p_foot.add_run("\t\t")
-    add_styled_run(p_foot, f"حرر في: {texts['date_str']}", is_arabic=True, font_size=w_foot, bold=False, font_name=w_font)
+    add_report_run(p_foot, f"حرر في: {texts['date_str']}", font_size=w_foot, bold=False, font_name=w_font)
 
     output = io.BytesIO()
     doc.save(output)
@@ -893,7 +949,10 @@ def render_live_preview_html(
 
     bullets_html = "".join([f"<li style='margin-bottom: 6px; text-align: justify; font-weight: 400;'>{s}</li>" for s in merged_violations])
 
-    html = f"""<div class="paper-preview" style="font-family: {css_font}; box-sizing: border-box; width: 100%; max-width: 100%; overflow: hidden; padding: 20px 15px;">
+    html = f"""<style>
+@import url('https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Noto+Naskh+Arabic:wght@400;700&display=swap');
+</style>
+<div class="paper-preview" style="font-family: {css_font}; box-sizing: border-box; width: 100%; max-width: 100%; overflow: hidden; padding: 20px 15px;">
 <div style="display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 4px; border-bottom: 2px solid #334155; padding-bottom: 8px; margin-bottom: 16px;">
 <div style="text-align: right; font-size: clamp(0.68rem, 2.2vw, 0.88rem); line-height: 1.45; font-weight: bold; overflow: hidden;">
 <div style="white-space: nowrap;">المديرية الإقليمية: {d_name}</div>
