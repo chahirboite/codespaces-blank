@@ -1,6 +1,8 @@
 import streamlit as st
 from header_tool import render_header_tool
 from report_tool import render_report_tool
+from massar_tool import render_massar_tool
+
 
 # إعدادات الصفحة الرئيسية
 st.set_page_config(
