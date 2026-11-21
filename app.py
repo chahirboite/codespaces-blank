@@ -139,7 +139,11 @@ with st.sidebar:
 
     selected_tool = st.radio(
         "اختر الأداة المطلوبة / Choisir l'outil:",
-        ["📝 الترويسة المدرسية الذكية", "📋 محرر التقارير السريعة"],
+        [
+            "📝 الترويسة المدرسية الذكية",
+            "📋 محرر التقارير السريعة",
+            "📊 مساعد التصحيح الذكي واستثمار نقط مسار",
+        ],
         index=0,
     )
 
@@ -170,11 +174,13 @@ with st.sidebar:
         use_container_width=True,
     )
 
-# التوجيه بين الأداتين
+# التوجيه بين الأدوات
 if selected_tool == "📝 الترويسة المدرسية الذكية":
     render_header_tool()
-else:
+elif selected_tool == "📋 محرر التقارير السريعة":
     render_report_tool()
+else:
+    render_massar_tool()
 
 # تذييل الصفحة الثابت وتوقيع المطور
 st.markdown(
