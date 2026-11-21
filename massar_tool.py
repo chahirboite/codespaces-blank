@@ -159,9 +159,14 @@ def _render_qualifying_fast_correction_tab(parsed_doc):
         f"المُنجز: **{entered_count} / {total_students}** | المتبقي: **{remaining_count}**"
     )
 
-    # محرك البحث الخاطف بالرقم الترتيبي (1..N) أو الاسم الكامل أو رمز مسار
+    # تفريغ خانة البحث بأمان قبل إنشاء حقل الإدخال لتجنب خطأ StreamlitWidgetAlreadyInstantiatedError
     search_key = f"search_query_{meta['filename']}"
-    if search_key not in st.session_state:
+    clear_flag_key = f"clear_flag_{meta['filename']}"
+
+    if st.session_state.get(clear_flag_key, False):
+        st.session_state[search_key] = ""
+        st.session_state[clear_flag_key] = False
+    elif search_key not in st.session_state:
         st.session_state[search_key] = ""
 
     query = st.text_input(
@@ -266,7 +271,7 @@ def _render_qualifying_fast_correction_tab(parsed_doc):
                     grade_value=grade_input,
                     is_absent=False,
                 )
-                st.session_state[search_key] = ""
+                st.session_state[clear_flag_key] = True
                 st.toast(f"✅ تم حفظ نقطة {active_student['name']} ({grade_input:.2f})")
                 st.rerun()
 
@@ -283,7 +288,7 @@ def _render_qualifying_fast_correction_tab(parsed_doc):
                     grade_value=None,
                     is_absent=True,
                 )
-                st.session_state[search_key] = ""
+                st.session_state[clear_flag_key] = True
                 st.toast(f"📝 تم تسجيل غياب مبرر لـ {active_student['name']}")
                 st.rerun()
 
