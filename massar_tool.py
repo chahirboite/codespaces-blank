@@ -43,23 +43,28 @@ def _inject_massar_cards_css():
         }
 
         /* إبقاء حقل النقطة وزر الحاسبة في سطر واحد بمحاذاة بعضهما على الهاتف والحاسوب */
+        div:has(> .grade-calc-row-marker) + div div[data-testid="stHorizontalBlock"],
         .element-container:has(.grade-calc-row-marker) + .element-container div[data-testid="stHorizontalBlock"] {
+            display: flex !important;
             flex-direction: row !important;
             flex-wrap: nowrap !important;
             align-items: center !important;
             gap: 8px !important;
         }
-        .element-container:has(.grade-calc-row-marker) + .element-container div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:nth-child(1) {
+        div:has(> .grade-calc-row-marker) + div div[data-testid="stHorizontalBlock"] > div:nth-child(1),
+        .element-container:has(.grade-calc-row-marker) + .element-container div[data-testid="stHorizontalBlock"] > div:nth-child(1) {
             flex: 1 1 auto !important;
             min-width: 0 !important;
         }
-        .element-container:has(.grade-calc-row-marker) + .element-container div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:nth-child(2) {
+        div:has(> .grade-calc-row-marker) + div div[data-testid="stHorizontalBlock"] > div:nth-child(2),
+        .element-container:has(.grade-calc-row-marker) + .element-container div[data-testid="stHorizontalBlock"] > div:nth-child(2) {
             width: 118px !important;
             min-width: 118px !important;
             max-width: 118px !important;
             flex: 0 0 118px !important;
         }
-        .element-container:has(.grade-calc-row-marker) + .element-container div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:nth-child(2) button {
+        div:has(> .grade-calc-row-marker) + div div[data-testid="stHorizontalBlock"] > div:nth-child(2) button,
+        .element-container:has(.grade-calc-row-marker) + .element-container div[data-testid="stHorizontalBlock"] > div:nth-child(2) button {
             background: linear-gradient(135deg, #0d9488 0%, #0284c7 100%) !important;
             color: #ffffff !important;
             border: none !important;
@@ -70,54 +75,39 @@ def _inject_massar_cards_css():
             padding: 0 8px !important;
             box-shadow: 0 3px 8px rgba(13, 148, 136, 0.25) !important;
         }
-        .element-container:has(.grade-calc-row-marker) + .element-container div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:nth-child(2) button:hover {
-            opacity: 0.92 !important;
-        }
 
-        /* إبقاء أزرار لوحة الآلة الحاسبة (4 أعمدة) وأزرار التحكم أفقية داخل النافذة المنبثقة على الهاتف */
-        .element-container:has(.calc-grid-marker) + .element-container div[data-testid="stHorizontalBlock"] {
+        /* تنسيق شبكة أزرار الآلة الحاسبة داخل النافذة المنبثقة (4 أزرار في كل صف على الهاتف) */
+        div[role="dialog"] div[data-testid="stHorizontalBlock"],
+        div[data-testid="stDialog"] div[data-testid="stHorizontalBlock"] {
+            display: flex !important;
             flex-direction: row !important;
             flex-wrap: nowrap !important;
             gap: 6px !important;
+            margin-bottom: 4px !important;
         }
-        .element-container:has(.calc-grid-marker) + .element-container div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
+        div[role="dialog"] div[data-testid="stHorizontalBlock"] > div,
+        div[data-testid="stDialog"] div[data-testid="stHorizontalBlock"] > div {
             flex: 1 1 0% !important;
+            width: auto !important;
             min-width: 0 !important;
         }
-        .element-container:has(.calc-grid-marker) + .element-container div[data-testid="stHorizontalBlock"] button {
+        div[role="dialog"] div[data-testid="stHorizontalBlock"] button,
+        div[data-testid="stDialog"] div[data-testid="stHorizontalBlock"] button {
             background-color: #f8fafc !important;
             color: #0f172a !important;
             border: 1.5px solid #cbd5e1 !important;
             border-radius: 10px !important;
-            height: 44px !important;
+            height: 42px !important;
             font-weight: 800 !important;
-            font-size: 0.95rem !important;
+            font-size: 0.92rem !important;
             padding: 0 2px !important;
             box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05) !important;
             direction: ltr !important;
         }
-        .element-container:has(.calc-grid-marker) + .element-container div[data-testid="stHorizontalBlock"] button:hover {
+        div[role="dialog"] div[data-testid="stHorizontalBlock"] button:hover,
+        div[data-testid="stDialog"] div[data-testid="stHorizontalBlock"] button:hover {
             background-color: #e0f2fe !important;
             border-color: #0284c7 !important;
-        }
-
-        .element-container:has(.calc-tools-marker) + .element-container div[data-testid="stHorizontalBlock"] {
-            flex-direction: row !important;
-            flex-wrap: nowrap !important;
-            gap: 6px !important;
-        }
-        .element-container:has(.calc-tools-marker) + .element-container div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
-            flex: 1 1 0% !important;
-            min-width: 0 !important;
-        }
-        .element-container:has(.calc-tools-marker) + .element-container div[data-testid="stHorizontalBlock"] button {
-            background-color: #f1f5f9 !important;
-            color: #334155 !important;
-            border: 1px solid #cbd5e1 !important;
-            height: 40px !important;
-            font-size: 0.84rem !important;
-            padding: 0 4px !important;
-            box-shadow: none !important;
         }
 
         .calc-screen-box {
@@ -125,8 +115,8 @@ def _inject_massar_cards_css():
             background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
             color: #f8fafc;
             border-radius: 14px;
-            padding: 14px 16px;
-            margin-bottom: 12px;
+            padding: 12px 14px;
+            margin-bottom: 10px;
             border: 1.5px solid #334155;
             box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.35);
         }
@@ -147,7 +137,7 @@ def _inject_massar_cards_css():
         }
         .calc-total-val {
             direction: ltr;
-            font-size: 1.85rem;
+            font-size: 1.8rem;
             font-weight: 800;
             color: #38bdf8;
             letter-spacing: 0.5px;
@@ -273,14 +263,50 @@ def _bind_live_search_js():
     )
 
 
-def _render_calculator_body(target_num_key, student_name):
-    """محتوى الآلة الحاسبة الذكية لجمع النقط الجزئية"""
+def _render_calculator_body(target_num_key, student_name, inside_dialog=True):
+    """محتوى الآلة الحاسبة الذكية لجمع النقط الجزئية دون إغلاق النافذة أثناء الجمع"""
     hist_key = f"calc_hist_{target_num_key}"
     if hist_key not in st.session_state:
         st.session_state[hist_key] = []
 
+    # مكان مخصص لشاشة الحاسبة في الأعلى يتحدث فور لمس أي زر
+    screen_placeholder = st.empty()
+
+    # شبكة النقط الجزئية (3 صفوف × 4 أزرار) — بدون st.rerun() حتى تبقى النافذة مفتوحة
+    for r_idx, row_items in enumerate(PARTIAL_GRADE_ROWS):
+        cols = st.columns(4)
+        for c_idx, (val, label) in enumerate(row_items):
+            with cols[c_idx]:
+                if st.button(label, key=f"cbtn_{target_num_key}_{r_idx}_{c_idx}", use_container_width=True):
+                    st.session_state[hist_key].append(val)
+                    if not inside_dialog:
+                        st.rerun()
+
+    st.markdown("<div style='height:4px;'></div>", unsafe_allow_html=True)
+
+    # أزرار التراجع، التصفير، والإلغاء
+    col_undo, col_reset, col_cancel = st.columns(3)
+    with col_undo:
+        if st.button("↩️ تراجع", key=f"c_undo_{target_num_key}", use_container_width=True):
+            if st.session_state[hist_key]:
+                st.session_state[hist_key].pop()
+                if not inside_dialog:
+                    st.rerun()
+    with col_reset:
+        if st.button("🔄 تصفير", key=f"c_reset_{target_num_key}", use_container_width=True):
+            st.session_state[hist_key] = []
+            if not inside_dialog:
+                st.rerun()
+    with col_cancel:
+        if st.button("✖️ إلغاء", key=f"c_cancel_{target_num_key}", use_container_width=True):
+            st.session_state.pop(hist_key, None)
+            st.session_state["active_calc_modal_key"] = None
+            st.rerun()
+
+    # قراءة القيم المحيّنة بعد معالجة ضغطة الزر لرسم الشاشة العلوية بدقة
     history = st.session_state[hist_key]
     raw_total = round(sum(history), 2)
+    final_capped = min(20.0, raw_total)
     exceeded = raw_total > 20.0
 
     tape_str = " + ".join(f"{v:g}" for v in history) if history else "اضغط على النقط الجزئية للجمع..."
@@ -291,7 +317,7 @@ def _render_calculator_body(target_num_key, student_name):
         else ""
     )
 
-    st.markdown(
+    screen_placeholder.markdown(
         f"""
         <div class="calc-screen-box">
             <div style="font-size:0.82rem; color:#cbd5e1; margin-bottom:4px;">
@@ -308,44 +334,14 @@ def _render_calculator_body(target_num_key, student_name):
         unsafe_allow_html=True,
     )
 
-    # شبكة النقط الجزئية (3 صفوف × 4 أزرار)
-    for r_idx, row_items in enumerate(PARTIAL_GRADE_ROWS):
-        st.markdown('<div class="calc-grid-marker"></div>', unsafe_allow_html=True)
-        cols = st.columns(4)
-        for c_idx, (val, label) in enumerate(row_items):
-            with cols[c_idx]:
-                if st.button(label, key=f"cbtn_{target_num_key}_{r_idx}_{c_idx}", use_container_width=True):
-                    st.session_state[hist_key].append(val)
-                    st.rerun()
-
-    st.markdown("<div style='height:6px;'></div>", unsafe_allow_html=True)
-
-    # أزرار التراجع، التصفير، والإلغاء
-    st.markdown('<div class="calc-tools-marker"></div>', unsafe_allow_html=True)
-    col_undo, col_reset, col_cancel = st.columns(3)
-    with col_undo:
-        if st.button("↩️ تراجع", key=f"c_undo_{target_num_key}", use_container_width=True):
-            if st.session_state[hist_key]:
-                st.session_state[hist_key].pop()
-                st.rerun()
-    with col_reset:
-        if st.button("🔄 تصفير", key=f"c_reset_{target_num_key}", use_container_width=True):
-            st.session_state[hist_key] = []
-            st.rerun()
-    with col_cancel:
-        if st.button("✖️ إلغاء", key=f"c_cancel_{target_num_key}", use_container_width=True):
-            st.session_state.pop(hist_key, None)
-            st.session_state["active_calc_modal_key"] = None
-            st.rerun()
-
-    # زر التأكيد الرئيسي لإدخال النقطة في الحقل
+    # زر التأكيد الرئيسي لإدخال النقطة في الحقل وإغلاق الحاسبة
     if st.button(
-        f"✅ تأكيد وإدخال ({min(20.0, raw_total):.2f})",
+        f"✅ تأكيد وإدخال ({final_capped:.2f})",
         type="primary",
         key=f"c_confirm_{target_num_key}",
         use_container_width=True,
     ):
-        st.session_state[target_num_key] = min(20.0, raw_total)
+        st.session_state[f"pending_calc_{target_num_key}"] = final_capped
         st.session_state.pop(hist_key, None)
         st.session_state["active_calc_modal_key"] = None
         st.rerun()
@@ -354,12 +350,12 @@ def _render_calculator_body(target_num_key, student_name):
 if hasattr(st, "dialog"):
     @st.dialog("🧮 حاسبة النقط الجزئية")
     def _open_calculator_dialog(target_num_key, student_name):
-        _render_calculator_body(target_num_key, student_name)
+        _render_calculator_body(target_num_key, student_name, inside_dialog=True)
 else:
     def _open_calculator_dialog(target_num_key, student_name):
         with st.container(border=True):
             st.markdown("#### 🧮 حاسبة النقط الجزئية")
-            _render_calculator_body(target_num_key, student_name)
+            _render_calculator_body(target_num_key, student_name, inside_dialog=False)
 
 
 def _render_cycle_selector():
@@ -554,7 +550,12 @@ def _render_qualifying_fast_correction_tab(parsed_doc):
         )
 
         num_key = f"num_in_{meta['filename']}_{selected_code}_{active_student['ordinal']}"
-        if num_key not in st.session_state:
+        pending_key = f"pending_calc_{num_key}"
+
+        # تطبيق النقطة القادمة من الحاسبة بأمان قبل رسم حقل الإدخال
+        if pending_key in st.session_state:
+            st.session_state[num_key] = float(st.session_state.pop(pending_key))
+        elif num_key not in st.session_state:
             st.session_state[num_key] = float(cur_grade) if cur_grade is not None else 10.00
 
         st.markdown(
@@ -582,7 +583,6 @@ def _render_qualifying_fast_correction_tab(parsed_doc):
                 if hasattr(st, "dialog"):
                     _open_calculator_dialog(num_key, active_student["name"])
 
-        # في حال عدم توفر st.dialog في نسخة قديمة، تُعرض الحاسبة كإطار منبثق مباشرة هنا
         if not hasattr(st, "dialog") and st.session_state.get("active_calc_modal_key") == num_key:
             _open_calculator_dialog(num_key, active_student["name"])
 
