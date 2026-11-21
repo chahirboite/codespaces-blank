@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 from massar_engine import (
     export_updated_massar_xlsx,
     parse_massar_qualifying_workbook,
@@ -10,6 +11,30 @@ def _inject_massar_cards_css():
     st.markdown(
         """
         <style>
+        /* ضبط اتجاه الكتابة من اليمين إلى اليسار لجميع عناصر الواجهة والتسميات */
+        div[data-testid="stWidgetLabel"],
+        div[data-testid="stWidgetLabel"] p,
+        div[data-testid="stCaptionContainer"],
+        div[data-testid="stCaptionContainer"] p,
+        div[data-testid="stExpander"] summary,
+        div[data-testid="stExpander"] p,
+        div[data-testid="stMarkdownContainer"] p {
+            direction: rtl !important;
+            text-align: right !important;
+            unicode-bidi: plaintext !important;
+        }
+
+        div[data-testid="stSelectbox"] > div,
+        div[data-testid="stTextInput"] input {
+            direction: rtl !important;
+            text-align: right !important;
+        }
+
+        /* إخفاء عبارة Press Enter to apply لتفعيل البحث اللحظي النظيف */
+        div[data-testid="InputInstructions"] {
+            display: none !important;
+        }
+
         .cycle-card {
             background: #ffffff;
             border: 1.5px solid #e2e8f0;
@@ -23,6 +48,7 @@ def _inject_massar_cards_css():
             flex-direction: column;
             justify-content: center;
             align-items: center;
+            direction: rtl;
         }
         .cycle-card-active {
             border: 2px solid #0284c7;
@@ -61,10 +87,71 @@ def _inject_massar_cards_css():
             padding: 14px 16px;
             margin: 10px 0 12px 0;
             box-shadow: 0 4px 12px rgba(2, 132, 199, 0.08);
+            direction: rtl;
+            text-align: right;
+        }
+        .rtl-status-bar {
+            direction: rtl;
+            text-align: right;
+            background: #f1f5f9;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 9px 12px;
+            font-size: 0.88rem;
+            color: #1e293b;
+            line-height: 1.7;
+            margin: 6px 0 12px 0;
+        }
+        .rtl-hint-box {
+            direction: rtl;
+            text-align: right;
+            background: #eff6ff;
+            border-right: 4px solid #3b82f6;
+            color: #1e40af;
+            padding: 10px 12px;
+            border-radius: 8px;
+            font-size: 0.88rem;
+            margin: 8px 0;
         }
         </style>
         """,
         unsafe_allow_html=True,
+    )
+
+
+def _bind_live_search_js():
+    """ربط خانة البحث بتحديث تلقائي فوري أثناء الكتابة دون الحاجة للضغط على Enter"""
+    components.html(
+        """
+        <script>
+        (function() {
+            const parentDoc = window.parent.document;
+            const inputs = parentDoc.querySelectorAll('input[type="text"]');
+            inputs.forEach(function(inp) {
+                const aria = inp.getAttribute('aria-label') || '';
+                if (aria.includes('ابحث بالرقم الترتيبي') && !inp.dataset.liveBound) {
+                    inp.dataset.liveBound = '1';
+                    let timer = null;
+                    inp.addEventListener('input', function() {
+                        clearTimeout(timer);
+                        timer = setTimeout(function() {
+                            const ev = new KeyboardEvent('keydown', {
+                                key: 'Enter',
+                                code: 'Enter',
+                                keyCode: 13,
+                                which: 13,
+                                bubbles: true,
+                                cancelable: true
+                            });
+                            inp.dispatchEvent(ev);
+                        }, 380);
+                    });
+                }
+            });
+        })();
+        </script>
+        """,
+        height=0,
     )
 
 
@@ -74,7 +161,7 @@ def _render_cycle_selector():
 
     st.markdown(
         """
-        <div style="text-align: center; padding: 15px; border-radius: 12px; background-color: #ffffff; border: 1px solid #e2e8f0; margin-bottom: 20px;">
+        <div dir="rtl" style="text-align: center; padding: 15px; border-radius: 12px; background-color: #ffffff; border: 1px solid #e2e8f0; margin-bottom: 20px;">
             <h1 style="color: #1e293b; margin: 0; font-size: 1.55rem; font-weight: 800;">📊 مساعد التصحيح الذكي واستثمار نقط مسار</h1>
             <p style="color: #64748b; margin-top: 6px; font-size: 0.94rem;">اختر السلك التعليمي للبدء في مسك النقط، حقن الملاحظات، وإنتاج تقارير الاستثمار</p>
         </div>
@@ -154,12 +241,17 @@ def _render_qualifying_fast_correction_tab(parsed_doc):
     progress_ratio = (entered_count / total_students) if total_students > 0 else 0.0
 
     st.progress(progress_ratio)
-    st.caption(
-        f"📌 القسم: **{meta['class_name']}** | المادة: **{meta['subject']}** | "
-        f"المُنجز: **{entered_count} / {total_students}** | المتبقي: **{remaining_count}**"
+    st.markdown(
+        f"""
+        <div class="rtl-status-bar">
+            📌 القسم: <b><bdi>{meta['class_name']}</bdi></b> &nbsp;|&nbsp; المادة: <b><bdi>{meta['subject']}</bdi></b><br>
+            ✅ المُنجز: <b>{entered_count} / {total_students}</b> &nbsp;|&nbsp; ⏳ المتبقي: <b>{remaining_count}</b>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
-    # تفريغ خانة البحث بأمان قبل إنشاء حقل الإدخال لتجنب خطأ StreamlitWidgetAlreadyInstantiatedError
+    # تفريغ خانة البحث بأمان قبل إنشاء حقل الإدخال
     search_key = f"search_query_{meta['filename']}"
     clear_flag_key = f"clear_flag_{meta['filename']}"
 
@@ -175,6 +267,9 @@ def _render_qualifying_fast_correction_tab(parsed_doc):
         placeholder="اكتب الرقم الترتيبي (1 - 40) أو جزءاً من الاسم...",
     ).strip()
 
+    # تفعيل التحديث الفوري أثناء الكتابة بدون الحاجة للضغط على Enter
+    _bind_live_search_js()
+
     matched_students = []
     if query:
         if query.isdigit():
@@ -188,7 +283,6 @@ def _render_qualifying_fast_correction_tab(parsed_doc):
                 if q_lower in s["name"].lower() or q_lower in s["massar_code"].lower()
             ]
     else:
-        # عرض أول تلميذ لم تُمسك نقطته بعد تلقائياً لتسريع العمل المتسلسل
         ungraded = [
             s
             for s in students
@@ -196,7 +290,14 @@ def _render_qualifying_fast_correction_tab(parsed_doc):
         ]
         if ungraded:
             matched_students = [ungraded[0]]
-            st.info("💡 يتم عرض أول ورقة متبقية تلقائياً، أو اكتب رقم الورقة في خانة البحث أعلاه.")
+            st.markdown(
+                """
+                <div class="rtl-hint-box">
+                    💡 يتم عرض أول ورقة متبقية تلقائياً، أو اكتب رقم الورقة في خانة البحث أعلاه.
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
     if query and not matched_students:
         st.warning("⚠️ لم يتم العثور على أي تلميذ مطابق. تأكد من الرقم الترتيبي أو الاسم.")
@@ -221,24 +322,24 @@ def _render_qualifying_fast_correction_tab(parsed_doc):
         if cur_abs:
             status_badge = "<span style='background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:6px;font-weight:700;'>غائب (مبرر)</span>"
         elif cur_grade is not None:
-            status_badge = f"<span style='background:#dcfce7;color:#166534;padding:2px 8px;border-radius:6px;font-weight:700;'>النقطة المسجلة: {cur_grade:.2f} / 20</span>"
+            status_badge = f"<span style='background:#dcfce7;color:#166534;padding:2px 8px;border-radius:6px;font-weight:700;'>النقطة المسجلة: <bdi>{cur_grade:.2f} / 20</bdi></span>"
         else:
             status_badge = "<span style='background:#f1f5f9;color:#475569;padding:2px 8px;border-radius:6px;'>لم تُمسك بعد</span>"
 
         st.markdown(
             f"""
-            <div class="student-mobile-card">
+            <div dir="rtl" class="student-mobile-card">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
                     <span style="background:#0284c7; color:#ffffff; font-weight:800; padding:3px 11px; border-radius:8px; font-size:0.95rem;">
                         الرقم الترتيبي: {active_student['ordinal']}
                     </span>
                     {status_badge}
                 </div>
-                <div style="font-size:1.18rem; font-weight:800; color:#0f172a; margin:4px 0;">
-                    {active_student['name']}
+                <div style="font-size:1.18rem; font-weight:800; color:#0f172a; margin:6px 0;">
+                    <bdi>{active_student['name']}</bdi>
                 </div>
-                <div style="font-size:0.84rem; color:#64748b;">
-                    رمز مسار: <b>{active_student['massar_code']}</b> | تاريخ الازدياد: {active_student['birth_date']}
+                <div style="font-size:0.84rem; color:#475569;">
+                    رمز مسار: <b><bdi>{active_student['massar_code']}</bdi></b> &nbsp;|&nbsp; تاريخ الازدياد: <bdi>{active_student['birth_date']}</bdi>
                 </div>
             </div>
             """,
@@ -303,7 +404,10 @@ def _render_qualifying_fast_correction_tab(parsed_doc):
             st.success("🎉 تم مسك جميع نقط هذا التقويم بالكامل!")
         else:
             for ms in missing_list:
-                st.markdown(f"- **رقم {ms['ordinal']}**: {ms['name']} (`{ms['massar_code']}`)")
+                st.markdown(
+                    f"<div dir='rtl' style='text-align:right; padding:3px 0;'>• <b>رقم {ms['ordinal']}</b>: <bdi>{ms['name']}</bdi> (<bdi>{ms['massar_code']}</bdi>)</div>",
+                    unsafe_allow_html=True,
+                )
 
     # زر التحميل الفوري لملف مسار المحدث
     st.markdown("---")
@@ -329,7 +433,7 @@ def _render_qualifying_workspace():
             st.session_state.massar_selected_cycle = None
             st.rerun()
     with col_title:
-        st.markdown("### 🎓 السلك الثانوي التأهيلي")
+        st.markdown("<h3 dir='rtl' style='text-align:right; margin:4px 0;'>🎓 السلك الثانوي التأهيلي</h3>", unsafe_allow_html=True)
 
     if "massar_qualifying_docs" not in st.session_state:
         st.session_state.massar_qualifying_docs = {}
