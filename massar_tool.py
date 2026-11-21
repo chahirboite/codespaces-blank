@@ -7,6 +7,13 @@ from massar_engine import (
 )
 
 
+PARTIAL_GRADE_ROWS = [
+    [(0.25, "+0,25"), (0.50, "+0,5"), (0.75, "+0,75"), (1.00, "+1")],
+    [(1.25, "+1,25"), (1.50, "+1,5"), (1.75, "+1,75"), (2.00, "+2")],
+    [(2.50, "+2,5"), (3.00, "+3"), (4.00, "+4"), (5.00, "+5")],
+]
+
+
 def _inject_massar_cards_css():
     st.markdown(
         """
@@ -33,6 +40,117 @@ def _inject_massar_cards_css():
         /* إخفاء عبارة Press Enter to apply لتفعيل البحث اللحظي النظيف */
         div[data-testid="InputInstructions"] {
             display: none !important;
+        }
+
+        /* إبقاء حقل النقطة وزر الحاسبة في سطر واحد بمحاذاة بعضهما على الهاتف والحاسوب */
+        .element-container:has(.grade-calc-row-marker) + .element-container div[data-testid="stHorizontalBlock"] {
+            flex-direction: row !important;
+            flex-wrap: nowrap !important;
+            align-items: center !important;
+            gap: 8px !important;
+        }
+        .element-container:has(.grade-calc-row-marker) + .element-container div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:nth-child(1) {
+            flex: 1 1 auto !important;
+            min-width: 0 !important;
+        }
+        .element-container:has(.grade-calc-row-marker) + .element-container div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:nth-child(2) {
+            width: 118px !important;
+            min-width: 118px !important;
+            max-width: 118px !important;
+            flex: 0 0 118px !important;
+        }
+        .element-container:has(.grade-calc-row-marker) + .element-container div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:nth-child(2) button {
+            background: linear-gradient(135deg, #0d9488 0%, #0284c7 100%) !important;
+            color: #ffffff !important;
+            border: none !important;
+            border-radius: 10px !important;
+            height: 44px !important;
+            font-weight: 800 !important;
+            font-size: 0.95rem !important;
+            padding: 0 8px !important;
+            box-shadow: 0 3px 8px rgba(13, 148, 136, 0.25) !important;
+        }
+        .element-container:has(.grade-calc-row-marker) + .element-container div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:nth-child(2) button:hover {
+            opacity: 0.92 !important;
+        }
+
+        /* إبقاء أزرار لوحة الآلة الحاسبة (4 أعمدة) وأزرار التحكم أفقية داخل النافذة المنبثقة على الهاتف */
+        .element-container:has(.calc-grid-marker) + .element-container div[data-testid="stHorizontalBlock"] {
+            flex-direction: row !important;
+            flex-wrap: nowrap !important;
+            gap: 6px !important;
+        }
+        .element-container:has(.calc-grid-marker) + .element-container div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
+            flex: 1 1 0% !important;
+            min-width: 0 !important;
+        }
+        .element-container:has(.calc-grid-marker) + .element-container div[data-testid="stHorizontalBlock"] button {
+            background-color: #f8fafc !important;
+            color: #0f172a !important;
+            border: 1.5px solid #cbd5e1 !important;
+            border-radius: 10px !important;
+            height: 44px !important;
+            font-weight: 800 !important;
+            font-size: 0.95rem !important;
+            padding: 0 2px !important;
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05) !important;
+            direction: ltr !important;
+        }
+        .element-container:has(.calc-grid-marker) + .element-container div[data-testid="stHorizontalBlock"] button:hover {
+            background-color: #e0f2fe !important;
+            border-color: #0284c7 !important;
+        }
+
+        .element-container:has(.calc-tools-marker) + .element-container div[data-testid="stHorizontalBlock"] {
+            flex-direction: row !important;
+            flex-wrap: nowrap !important;
+            gap: 6px !important;
+        }
+        .element-container:has(.calc-tools-marker) + .element-container div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
+            flex: 1 1 0% !important;
+            min-width: 0 !important;
+        }
+        .element-container:has(.calc-tools-marker) + .element-container div[data-testid="stHorizontalBlock"] button {
+            background-color: #f1f5f9 !important;
+            color: #334155 !important;
+            border: 1px solid #cbd5e1 !important;
+            height: 40px !important;
+            font-size: 0.84rem !important;
+            padding: 0 4px !important;
+            box-shadow: none !important;
+        }
+
+        .calc-screen-box {
+            direction: rtl;
+            background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+            color: #f8fafc;
+            border-radius: 14px;
+            padding: 14px 16px;
+            margin-bottom: 12px;
+            border: 1.5px solid #334155;
+            box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.35);
+        }
+        .calc-tape {
+            direction: ltr;
+            text-align: left;
+            font-size: 0.82rem;
+            color: #94a3b8;
+            min-height: 20px;
+            white-space: nowrap;
+            overflow-x: auto;
+            margin-bottom: 4px;
+        }
+        .calc-total-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+        }
+        .calc-total-val {
+            direction: ltr;
+            font-size: 1.85rem;
+            font-weight: 800;
+            color: #38bdf8;
+            letter-spacing: 0.5px;
         }
 
         .cycle-card {
@@ -153,6 +271,95 @@ def _bind_live_search_js():
         """,
         height=0,
     )
+
+
+def _render_calculator_body(target_num_key, student_name):
+    """محتوى الآلة الحاسبة الذكية لجمع النقط الجزئية"""
+    hist_key = f"calc_hist_{target_num_key}"
+    if hist_key not in st.session_state:
+        st.session_state[hist_key] = []
+
+    history = st.session_state[hist_key]
+    raw_total = round(sum(history), 2)
+    exceeded = raw_total > 20.0
+
+    tape_str = " + ".join(f"{v:g}" for v in history) if history else "اضغط على النقط الجزئية للجمع..."
+    val_color = "#f87171" if exceeded else "#38bdf8"
+    warn_html = (
+        "<div style='color:#fca5a5; font-size:0.78rem; margin-top:4px;'>⚠️ المجموع تجاوز 20.00 (سيُضبط تلقائياً في 20.00 عند التأكيد)</div>"
+        if exceeded
+        else ""
+    )
+
+    st.markdown(
+        f"""
+        <div class="calc-screen-box">
+            <div style="font-size:0.82rem; color:#cbd5e1; margin-bottom:4px;">
+                👤 التلميذ(ة): <b><bdi>{student_name}</bdi></b>
+            </div>
+            <div class="calc-tape">{tape_str}</div>
+            <div class="calc-total-row">
+                <span style="font-size:0.9rem; color:#94a3b8;">المجموع المحصل:</span>
+                <span class="calc-total-val" style="color:{val_color};">{raw_total:.2f} <span style="font-size:0.95rem; color:#94a3b8;">/ 20</span></span>
+            </div>
+            {warn_html}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # شبكة النقط الجزئية (3 صفوف × 4 أزرار)
+    for r_idx, row_items in enumerate(PARTIAL_GRADE_ROWS):
+        st.markdown('<div class="calc-grid-marker"></div>', unsafe_allow_html=True)
+        cols = st.columns(4)
+        for c_idx, (val, label) in enumerate(row_items):
+            with cols[c_idx]:
+                if st.button(label, key=f"cbtn_{target_num_key}_{r_idx}_{c_idx}", use_container_width=True):
+                    st.session_state[hist_key].append(val)
+                    st.rerun()
+
+    st.markdown("<div style='height:6px;'></div>", unsafe_allow_html=True)
+
+    # أزرار التراجع، التصفير، والإلغاء
+    st.markdown('<div class="calc-tools-marker"></div>', unsafe_allow_html=True)
+    col_undo, col_reset, col_cancel = st.columns(3)
+    with col_undo:
+        if st.button("↩️ تراجع", key=f"c_undo_{target_num_key}", use_container_width=True):
+            if st.session_state[hist_key]:
+                st.session_state[hist_key].pop()
+                st.rerun()
+    with col_reset:
+        if st.button("🔄 تصفير", key=f"c_reset_{target_num_key}", use_container_width=True):
+            st.session_state[hist_key] = []
+            st.rerun()
+    with col_cancel:
+        if st.button("✖️ إلغاء", key=f"c_cancel_{target_num_key}", use_container_width=True):
+            st.session_state.pop(hist_key, None)
+            st.session_state["active_calc_modal_key"] = None
+            st.rerun()
+
+    # زر التأكيد الرئيسي لإدخال النقطة في الحقل
+    if st.button(
+        f"✅ تأكيد وإدخال ({min(20.0, raw_total):.2f})",
+        type="primary",
+        key=f"c_confirm_{target_num_key}",
+        use_container_width=True,
+    ):
+        st.session_state[target_num_key] = min(20.0, raw_total)
+        st.session_state.pop(hist_key, None)
+        st.session_state["active_calc_modal_key"] = None
+        st.rerun()
+
+
+if hasattr(st, "dialog"):
+    @st.dialog("🧮 حاسبة النقط الجزئية")
+    def _open_calculator_dialog(target_num_key, student_name):
+        _render_calculator_body(target_num_key, student_name)
+else:
+    def _open_calculator_dialog(target_num_key, student_name):
+        with st.container(border=True):
+            st.markdown("#### 🧮 حاسبة النقط الجزئية")
+            _render_calculator_body(target_num_key, student_name)
 
 
 def _render_cycle_selector():
@@ -346,16 +553,38 @@ def _render_qualifying_fast_correction_tab(parsed_doc):
             unsafe_allow_html=True,
         )
 
-        default_num = float(cur_grade) if cur_grade is not None else 10.00
-        grade_input = st.number_input(
-            "أدخل النقطة (من 0.00 إلى 20.00):",
-            min_value=0.0,
-            max_value=20.0,
-            value=default_num,
-            step=0.25,
-            format="%.2f",
-            key=f"num_in_{meta['filename']}_{selected_code}_{active_student['ordinal']}",
+        num_key = f"num_in_{meta['filename']}_{selected_code}_{active_student['ordinal']}"
+        if num_key not in st.session_state:
+            st.session_state[num_key] = float(cur_grade) if cur_grade is not None else 10.00
+
+        st.markdown(
+            "<div dir='rtl' style='text-align:right; font-weight:700; font-size:0.9rem; color:#1e293b; margin-bottom:4px;'>أدخل النقطة (من 0.00 إلى 20.00):</div>",
+            unsafe_allow_html=True,
         )
+
+        # صف أفقي يجمع حقل إدخال النقطة وبمحاذاته زر الآلة الحاسبة الذكية
+        st.markdown('<div class="grade-calc-row-marker"></div>', unsafe_allow_html=True)
+        col_num, col_calc = st.columns([0.68, 0.32])
+        with col_num:
+            grade_input = st.number_input(
+                "أدخل النقطة",
+                min_value=0.0,
+                max_value=20.0,
+                step=0.25,
+                format="%.2f",
+                key=num_key,
+                label_visibility="collapsed",
+            )
+        with col_calc:
+            if st.button("🧮 حاسبة", key=f"btn_open_calc_{num_key}", use_container_width=True):
+                st.session_state[f"calc_hist_{num_key}"] = []
+                st.session_state["active_calc_modal_key"] = num_key
+                if hasattr(st, "dialog"):
+                    _open_calculator_dialog(num_key, active_student["name"])
+
+        # في حال عدم توفر st.dialog في نسخة قديمة، تُعرض الحاسبة كإطار منبثق مباشرة هنا
+        if not hasattr(st, "dialog") and st.session_state.get("active_calc_modal_key") == num_key:
+            _open_calculator_dialog(num_key, active_student["name"])
 
         col_save, col_abs = st.columns([0.62, 0.38])
         with col_save:
@@ -372,6 +601,8 @@ def _render_qualifying_fast_correction_tab(parsed_doc):
                     grade_value=grade_input,
                     is_absent=False,
                 )
+                st.session_state.pop(num_key, None)
+                st.session_state["active_calc_modal_key"] = None
                 st.session_state[clear_flag_key] = True
                 st.toast(f"✅ تم حفظ نقطة {active_student['name']} ({grade_input:.2f})")
                 st.rerun()
@@ -389,6 +620,8 @@ def _render_qualifying_fast_correction_tab(parsed_doc):
                     grade_value=None,
                     is_absent=True,
                 )
+                st.session_state.pop(num_key, None)
+                st.session_state["active_calc_modal_key"] = None
                 st.session_state[clear_flag_key] = True
                 st.toast(f"📝 تم تسجيل غياب مبرر لـ {active_student['name']}")
                 st.rerun()
